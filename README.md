@@ -55,9 +55,29 @@
 python3 --version  # Python 3.8 이상 필요
 ```
 
-### 2. 라이브러리 설치
+### 2. 가상환경 생성 및 활성화
 ```bash
-pip3 install -r requirements.txt
+# 가상환경 생성
+python3 -m venv venv
+
+# 가상환경 활성화 (macOS/Linux)
+source venv/bin/activate
+
+# 가상환경 활성화 (Windows)
+venv\Scripts\activate
+
+# 활성화되면 프롬프트 앞에 (venv)가 표시됩니다
+```
+
+### 3. 라이브러리 설치
+```bash
+# 가상환경이 활성화된 상태에서 실행
+pip install -r requirements.txt
+```
+
+### 4. 가상환경 비활성화 (작업 완료 후)
+```bash
+deactivate
 ```
 
 ### 3. 설정 파일 준비
