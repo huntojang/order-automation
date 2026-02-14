@@ -40,6 +40,51 @@ def load_order_excel(file_path: str) -> pd.DataFrame:
         return None
 
 
+def load_and_merge_excel_files(directory: str) -> pd.DataFrame:
+    """
+    디렉토리의 모든 엑셀 파일을 읽어서 하나로 합침
+
+    Args:
+        directory: 엑셀 파일이 있는 디렉토리
+
+    Returns:
+        합쳐진 DataFrame
+    """
+    import glob
+
+    # 모든 엑셀 파일 찾기
+    excel_files = glob.glob(os.path.join(directory, '*.xlsx'))
+
+    if not excel_files:
+        logging.error(f'❌ {directory} 디렉토리에 엑셀 파일이 없습니다.')
+        return None
+
+    logging.info(f'📂 발견된 엑셀 파일: {len(excel_files)}개')
+
+    all_dataframes = []
+
+    for file_path in sorted(excel_files):
+        try:
+            df = pd.read_excel(file_path, engine='openpyxl')
+            file_name = os.path.basename(file_path)
+            logging.info(f'  ✅ {file_name}: {len(df)}건')
+            all_dataframes.append(df)
+        except Exception as e:
+            logging.error(f'  ❌ {os.path.basename(file_path)} 로드 실패: {e}')
+            continue
+
+    if not all_dataframes:
+        logging.error('❌ 로드된 엑셀 파일이 없습니다.')
+        return None
+
+    # 모든 DataFrame 합치기
+    merged_df = pd.concat(all_dataframes, ignore_index=True)
+
+    logging.info(f'📊 총 주문 건수 (합계): {len(merged_df)}')
+
+    return merged_df
+
+
 def split_by_vendor(df: pd.DataFrame, vendor_column='공급처') -> dict:
     """
     업체별로 데이터 분류
@@ -188,16 +233,10 @@ def main():
         logging.info('테스트 모드로 계속 진행합니다 (구글 시트 업로드 제외)')
         sheet_client = None
 
-    # 엑셀 파일 찾기
+    # 엑셀 파일 로드 (여러 파일 자동 병합)
     input_dir = 'input'
-    excel_file = get_latest_file(input_dir, '*.xlsx')
+    df = load_and_merge_excel_files(input_dir)
 
-    if not excel_file:
-        logging.error(f'❌ {input_dir} 디렉토리에 엑셀 파일이 없습니다.')
-        sys.exit(1)
-
-    # 엑셀 파일 로드
-    df = load_order_excel(excel_file)
     if df is None:
         sys.exit(1)
 
