@@ -15,7 +15,7 @@ import pandas as pd
 import requests
 
 from utils import (
-    Config, GoogleSheetClient, Logger,
+    Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger,
     get_today_str, get_latest_file
 )
 
@@ -40,32 +40,37 @@ def load_order_excel(file_path: str) -> pd.DataFrame:
         return None
 
 
-def load_and_merge_excel_files(directory: str) -> pd.DataFrame:
+def load_and_merge_files(directory: str) -> pd.DataFrame:
     """
-    디렉토리의 모든 엑셀 파일을 읽어서 하나로 합침
+    디렉토리의 모든 엑셀/CSV 파일을 읽어서 하나로 합침
 
     Args:
-        directory: 엑셀 파일이 있는 디렉토리
+        directory: 파일이 있는 디렉토리
 
     Returns:
         합쳐진 DataFrame
     """
     import glob
 
-    # 모든 엑셀 파일 찾기
+    # 엑셀 + CSV 파일 찾기
     excel_files = glob.glob(os.path.join(directory, '*.xlsx'))
+    csv_files = glob.glob(os.path.join(directory, '*.csv'))
+    all_files = excel_files + csv_files
 
-    if not excel_files:
-        logging.error(f'❌ {directory} 디렉토리에 엑셀 파일이 없습니다.')
+    if not all_files:
+        logging.error(f'❌ {directory} 디렉토리에 데이터 파일이 없습니다.')
         return None
 
-    logging.info(f'📂 발견된 엑셀 파일: {len(excel_files)}개')
+    logging.info(f'📂 발견된 파일: {len(all_files)}개')
 
     all_dataframes = []
 
-    for file_path in sorted(excel_files):
+    for file_path in sorted(all_files):
         try:
-            df = pd.read_excel(file_path, engine='openpyxl')
+            if file_path.endswith('.csv'):
+                df = pd.read_csv(file_path, encoding='utf-8')
+            else:
+                df = pd.read_excel(file_path, engine='openpyxl')
             file_name = os.path.basename(file_path)
             logging.info(f'  ✅ {file_name}: {len(df)}건')
             all_dataframes.append(df)
@@ -74,7 +79,7 @@ def load_and_merge_excel_files(directory: str) -> pd.DataFrame:
             continue
 
     if not all_dataframes:
-        logging.error('❌ 로드된 엑셀 파일이 없습니다.')
+        logging.error('❌ 로드된 파일이 없습니다.')
         return None
 
     # 모든 DataFrame 합치기
@@ -119,23 +124,37 @@ def prepare_sheet_data(df: pd.DataFrame) -> list:
     Returns:
         2차원 리스트 (헤더 포함)
     """
-    # 컬럼 순서 지정
-    columns = [
-        '주문일자', '주문번호', '수취인명', '연락처',
-        '주소', '상품명', '옵션', '수량', '택배사', '송장번호'
-    ]
+    # 시트 헤더 → 원본 컬럼 매핑 (여러 형식 지원)
+    column_mapping = {
+        '주문일자': ['주문일자'],
+        '주문번호': ['주문번호'],
+        '수취인명': ['수취인명', '수령자 이름'],
+        '연락처': ['연락처', '수령자 휴대폰번호', '수령자 전화'],
+        '주소': ['주소', '수령자 주소'],
+        '상품명': ['상품명'],
+        '옵션': ['옵션', '옵션명'],
+        '수량': ['수량', '상품수량'],
+        '택배사': ['택배사'],
+        '송장번호': ['송장번호'],
+    }
 
-    # 존재하지 않는 컬럼은 빈 값으로 채우기
-    for col in columns:
-        if col not in df.columns:
-            df[col] = ''
+    sheet_headers = list(column_mapping.keys())
 
-    # 헤더 + 데이터
-    data = [columns]
-    for _, row in df[columns].iterrows():
-        data.append(row.tolist())
+    def find_value(row, candidates):
+        """여러 컬럼명 후보 중 값이 있는 것을 찾아 반환"""
+        for col in candidates:
+            if col in df.columns:
+                val = row[col]
+                if not pd.isna(val) and str(val).strip() != '':
+                    return str(val)
+        return ''
 
-    return data
+    rows = []
+    for _, row in df.iterrows():
+        new_row = [find_value(row, candidates) for candidates in column_mapping.values()]
+        rows.append(new_row)
+
+    return [sheet_headers] + rows
 
 
 def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
@@ -219,23 +238,28 @@ def main():
         logging.error('❌ 업체 정보가 없습니다. 종료합니다.')
         sys.exit(1)
 
-    # 구글 시트 클라이언트 초기화
+    # 구글 시트 클라이언트 초기화 (서비스 계정 우선, 없으면 OAuth2)
+    sheet_client = None
     try:
         google_credentials = config.get_google_credentials_file()
-        if not os.path.exists(google_credentials):
-            logging.error(f'❌ 구글 인증 파일이 없습니다: {google_credentials}')
-            logging.info('테스트 모드로 계속 진행합니다 (구글 시트 업로드 제외)')
-            sheet_client = None
-        else:
+        if os.path.exists(google_credentials):
             sheet_client = GoogleSheetClient(google_credentials)
-    except Exception as e:
-        logging.error(f'❌ 구글 시트 클라이언트 초기화 실패: {e}')
-        logging.info('테스트 모드로 계속 진행합니다 (구글 시트 업로드 제외)')
-        sheet_client = None
+    except Exception:
+        pass
 
-    # 엑셀 파일 로드 (여러 파일 자동 병합)
+    if not sheet_client:
+        try:
+            sheet_client = GoogleSheetOAuthClient(
+                oauth_credentials_file=config.get_oauth_credentials_file(),
+                token_file=config.get_oauth_token_file()
+            )
+        except Exception as e:
+            logging.error(f'❌ 구글 시트 클라이언트 초기화 실패: {e}')
+            logging.info('테스트 모드로 계속 진행합니다 (구글 시트 업로드 제외)')
+
+    # 데이터 파일 로드 (엑셀 + CSV, 여러 파일 자동 병합)
     input_dir = 'input'
-    df = load_and_merge_excel_files(input_dir)
+    df = load_and_merge_files(input_dir)
 
     if df is None:
         sys.exit(1)

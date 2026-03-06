@@ -28,6 +28,8 @@ wheels/
 config/google_credentials.json
 config/alimtalk_config.json
 config/vendors.json
+config/oauth_credentials.json
+config/token.json
 
 # 데이터 파일
 input/*.xlsx

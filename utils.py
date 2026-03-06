@@ -9,16 +9,32 @@ from typing import Dict, List, Any
 
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 
 class Config:
-    """설정 관리 클래스"""
+    """설정 관리 클래스 (로컬 파일 또는 Streamlit Secrets 지원)"""
 
     def __init__(self, config_dir='config'):
         self.config_dir = config_dir
+        self._secrets = None
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and len(st.secrets) > 0:
+                self._secrets = st.secrets
+        except Exception:
+            pass
 
     def load_vendors(self) -> List[Dict[str, Any]]:
         """업체 정보 로드"""
+        if self._secrets and "vendors" in self._secrets:
+            vendors_raw = self._secrets["vendors"]
+            if isinstance(vendors_raw, str):
+                return json.loads(vendors_raw).get('vendors', [])
+            return list(vendors_raw.get('vendors', []))
+
         vendors_file = os.path.join(self.config_dir, 'vendors.json')
         try:
             with open(vendors_file, 'r', encoding='utf-8') as f:
@@ -26,7 +42,6 @@ class Config:
                 return data.get('vendors', [])
         except FileNotFoundError:
             logging.error(f'업체 정보 파일을 찾을 수 없습니다: {vendors_file}')
-            logging.info('config/vendors.json.template 파일을 복사하여 설정하세요.')
             return []
         except json.JSONDecodeError as e:
             logging.error(f'업체 정보 파일 형식 오류: {e}')
@@ -34,32 +49,56 @@ class Config:
 
     def load_alimtalk_config(self) -> Dict[str, Any]:
         """알림톡 설정 로드"""
+        if self._secrets and "alimtalk" in self._secrets:
+            alimtalk_raw = self._secrets["alimtalk"]
+            if isinstance(alimtalk_raw, str):
+                return json.loads(alimtalk_raw)
+            return dict(alimtalk_raw)
+
         config_file = os.path.join(self.config_dir, 'alimtalk_config.json')
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
             logging.error(f'알림톡 설정 파일을 찾을 수 없습니다: {config_file}')
-            logging.info('config/alimtalk_config.json.template 파일을 복사하여 설정하세요.')
             return {}
         except json.JSONDecodeError as e:
             logging.error(f'알림톡 설정 파일 형식 오류: {e}')
             return {}
 
     def get_google_credentials_file(self) -> str:
-        """구글 API 인증 파일 경로 반환"""
+        """구글 API 인증 파일 경로 (서비스 계정)"""
         return os.path.join(self.config_dir, 'google_credentials.json')
+
+    def get_google_credentials_dict(self) -> dict:
+        """구글 API 인증 정보 (Streamlit Secrets용)"""
+        if self._secrets and "google_credentials" in self._secrets:
+            cred_raw = self._secrets["google_credentials"]
+            if isinstance(cred_raw, str):
+                return json.loads(cred_raw)
+            return dict(cred_raw)
+        return None
+
+    def get_oauth_credentials_file(self) -> str:
+        """OAuth2 인증 파일 경로"""
+        return os.path.join(self.config_dir, 'oauth_credentials.json')
+
+    def get_oauth_token_file(self) -> str:
+        """OAuth2 토큰 저장 파일 경로"""
+        return os.path.join(self.config_dir, 'token.json')
 
 
 class GoogleSheetClient:
     """구글 시트 클라이언트"""
 
-    def __init__(self, credentials_file: str):
+    def __init__(self, credentials_file: str = None, credentials_dict: dict = None):
         """
         Args:
             credentials_file: 구글 API 인증 JSON 파일 경로
+            credentials_dict: 구글 API 인증 정보 딕셔너리 (Streamlit Secrets용)
         """
         self.credentials_file = credentials_file
+        self.credentials_dict = credentials_dict
         self.client = None
         self._authenticate()
 
@@ -70,14 +109,18 @@ class GoogleSheetClient:
                 'https://spreadsheets.google.com/feeds',
                 'https://www.googleapis.com/auth/drive'
             ]
-            credentials = ServiceAccountCredentials.from_json_keyfile_name(
-                self.credentials_file, scope
-            )
+            if self.credentials_dict:
+                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                    self.credentials_dict, scope
+                )
+            else:
+                credentials = ServiceAccountCredentials.from_json_keyfile_name(
+                    self.credentials_file, scope
+                )
             self.client = gspread.authorize(credentials)
             logging.info('✅ 구글 시트 인증 성공')
         except FileNotFoundError:
             logging.error(f'❌ 구글 인증 파일을 찾을 수 없습니다: {self.credentials_file}')
-            logging.info('Google Cloud Console에서 서비스 계정 JSON 키를 다운받아 설정하세요.')
             raise
         except Exception as e:
             logging.error(f'❌ 구글 시트 인증 실패: {e}')
@@ -158,6 +201,105 @@ class GoogleSheetClient:
             worksheet = spreadsheet.get_worksheet(worksheet_index)
             return worksheet.get_all_values()
 
+        except Exception as e:
+            logging.error(f'❌ 시트 읽기 실패: {e}')
+            return []
+
+
+class GoogleSheetOAuthClient:
+    """OAuth2 기반 구글 시트 클라이언트 (시트 생성 가능)"""
+
+    SCOPES = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
+
+    def __init__(self, oauth_credentials_file: str, token_file: str):
+        self.oauth_credentials_file = oauth_credentials_file
+        self.token_file = token_file
+        self.client = None
+        self._authenticate()
+
+    def _authenticate(self):
+        """OAuth2 인증 (처음 1번만 브라우저 로그인 필요)"""
+        creds = None
+
+        # 저장된 토큰이 있으면 로드
+        if os.path.exists(self.token_file):
+            creds = Credentials.from_authorized_user_file(self.token_file, self.SCOPES)
+
+        # 토큰이 없거나 만료됐으면 새로 발급
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    self.oauth_credentials_file, self.SCOPES
+                )
+                creds = flow.run_local_server(port=0)
+
+            # 토큰 저장
+            with open(self.token_file, 'w') as f:
+                f.write(creds.to_json())
+
+        self.client = gspread.authorize(creds)
+        logging.info('✅ OAuth2 구글 시트 인증 성공')
+
+    def create_spreadsheet(self, title: str, folder_id: str = None):
+        """새 스프레드시트 생성"""
+        spreadsheet = self.client.create(title, folder_id=folder_id)
+        logging.info(f'✅ 스프레드시트 생성: {title}')
+        return spreadsheet
+
+    def open_sheet_by_url(self, url: str):
+        """URL로 시트 열기"""
+        try:
+            return self.client.open_by_url(url)
+        except Exception as e:
+            logging.error(f'❌ 시트 열기 실패 ({url}): {e}')
+            return None
+
+    def update_sheet(self, sheet_url: str, data: List[List[Any]],
+                     worksheet_index: int = 0) -> bool:
+        """시트 데이터 업데이트"""
+        try:
+            spreadsheet = self.open_sheet_by_url(sheet_url)
+            if not spreadsheet:
+                return False
+
+            worksheet = spreadsheet.get_worksheet(worksheet_index)
+            worksheet.clear()
+
+            if data:
+                worksheet.update('A1', data)
+
+            if len(data) > 0:
+                worksheet.format('A1:J1', {
+                    'textFormat': {'bold': True},
+                    'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
+                })
+
+            if len(data) > 1:
+                last_row = len(data)
+                worksheet.format(f'J2:J{last_row}', {
+                    'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
+                })
+
+            logging.info(f'✅ 시트 업데이트 완료: {spreadsheet.title}')
+            return True
+
+        except Exception as e:
+            logging.error(f'❌ 시트 업데이트 실패: {e}')
+            return False
+
+    def read_sheet(self, sheet_url: str, worksheet_index: int = 0) -> List[List[Any]]:
+        """시트 데이터 읽기"""
+        try:
+            spreadsheet = self.open_sheet_by_url(sheet_url)
+            if not spreadsheet:
+                return []
+            worksheet = spreadsheet.get_worksheet(worksheet_index)
+            return worksheet.get_all_values()
         except Exception as e:
             logging.error(f'❌ 시트 읽기 실패: {e}')
             return []
