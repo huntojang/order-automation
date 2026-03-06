@@ -30,10 +30,11 @@ class Config:
     def load_vendors(self) -> List[Dict[str, Any]]:
         """업체 정보 로드"""
         if self._secrets and "vendors" in self._secrets:
-            vendors_raw = self._secrets["vendors"]
-            if isinstance(vendors_raw, str):
-                return json.loads(vendors_raw).get('vendors', [])
-            return list(vendors_raw.get('vendors', []))
+            vendors_section = self._secrets["vendors"]
+            vendors_str = vendors_section.get("vendors", "[]") if hasattr(vendors_section, 'get') else str(vendors_section)
+            if isinstance(vendors_str, str):
+                return json.loads(vendors_str)
+            return []
 
         vendors_file = os.path.join(self.config_dir, 'vendors.json')
         try:
