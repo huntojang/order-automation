@@ -33,7 +33,8 @@ class Config:
             vendors_section = self._secrets["vendors"]
             vendors_str = vendors_section.get("vendors", "[]") if hasattr(vendors_section, 'get') else str(vendors_section)
             if isinstance(vendors_str, str):
-                return json.loads(vendors_str)
+                parsed = json.loads(vendors_str)
+                return [dict(v) for v in parsed]
             return []
 
         vendors_file = os.path.join(self.config_dir, 'vendors.json')
