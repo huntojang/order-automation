@@ -703,29 +703,32 @@ elif page == "📤 발주 업로드":
                 """, unsafe_allow_html=True)
                 st.success(f"발주 처리 완료! {success_count}개 업체에 총 {len(merged_df)}건 시트 업로드 + 카카오 알림톡 발송 완료")
 
-        # 알림톡 발송 내역 (접기/펼치기)
+        # 알림톡 발송 내역
         if st.session_state.get('alimtalk_logs'):
             st.markdown("---")
-            with st.expander("📱 카카오 알림톡 발송 내역", expanded=False):
-                _date = st.session_state.get('alimtalk_date', '')
+            st.markdown("### 📱 카카오 알림톡 발송 현황")
+            _date = st.session_state.get('alimtalk_date', '')
+            for _al in st.session_state['alimtalk_logs']:
+                st.markdown(f"""
+                <div class="list-row list-row-active">
+                    <div style="flex:1;">
+                        <div class="list-name">✅ {_al['name']}</div>
+                        <div class="list-desc" style="color:rgba(255,255,255,0.7);">{_al['phone']} · {_al['count']}건 발주 알림톡 발송 완료</div>
+                    </div>
+                    <a href="{_al['sheet_url']}" target="_blank" style="text-decoration:none;">
+                        <div class="list-arrow">→</div>
+                    </a>
+                </div>""", unsafe_allow_html=True)
+            with st.expander("📨 발송된 메시지 미리보기"):
                 for _al in st.session_state['alimtalk_logs']:
-                    col1, col2 = st.columns([1, 2])
-                    with col1:
-                        st.markdown(f"**{_al['name']}** ({_al['phone']})")
-                    with col2:
-                        st.markdown(f"""
-                        <div class="kakao-msg">
-                            <strong>[갓샵] 발주 알림</strong><br><br>
-                            안녕하세요, {_al['name']} 사장님.<br>
-                            {_date} 신규 주문 <strong>{_al['count']}건</strong>이 등록되었습니다.<br><br>
-                            아래 링크에서 주문 내역 확인 후,<br>
-                            '송장번호' 칸에 입력 부탁드립니다.<br><br>
-                            ▶ <a href="{_al['sheet_url']}" target="_blank">발주서 확인하기</a>
-                        </div>
-                        """, unsafe_allow_html=True)
                     st.markdown(f"""
-                    <div class="notification-bar">
-                        ✅ {_al['name']} 사장님에게 알림톡 발송 완료!
+                    <div class="kakao-msg">
+                        <strong>[갓샵] 발주 알림</strong><br><br>
+                        안녕하세요, {_al['name']} 사장님.<br>
+                        {_date} 신규 주문 <strong>{_al['count']}건</strong>이 등록되었습니다.<br><br>
+                        아래 링크에서 주문 내역 확인 후,<br>
+                        '송장번호' 칸에 입력 부탁드립니다.<br><br>
+                        ▶ <a href="{_al['sheet_url']}" target="_blank">발주서 확인하기</a>
                     </div>
                     """, unsafe_allow_html=True)
 
