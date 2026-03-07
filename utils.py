@@ -28,26 +28,24 @@ class Config:
             pass
 
     def load_vendors(self) -> List[Dict[str, Any]]:
-        """업체 정보 로드"""
+        """업체 정보 로드 (파일 우선, 없으면 Secrets)"""
+        vendors_file = os.path.join(self.config_dir, 'vendors.json')
+        try:
+            with open(vendors_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('vendors', [])
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+
         if self._secrets and "vendors" in self._secrets:
             vendors_section = self._secrets["vendors"]
             vendors_str = vendors_section.get("vendors", "[]") if hasattr(vendors_section, 'get') else str(vendors_section)
             if isinstance(vendors_str, str):
                 parsed = json.loads(vendors_str)
                 return [dict(v) for v in parsed]
-            return []
 
-        vendors_file = os.path.join(self.config_dir, 'vendors.json')
-        try:
-            with open(vendors_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get('vendors', [])
-        except FileNotFoundError:
-            logging.error(f'업체 정보 파일을 찾을 수 없습니다: {vendors_file}')
-            return []
-        except json.JSONDecodeError as e:
-            logging.error(f'업체 정보 파일 형식 오류: {e}')
-            return []
+        logging.error(f'업체 정보를 찾을 수 없습니다')
+        return []
 
     def load_alimtalk_config(self) -> Dict[str, Any]:
         """알림톡 설정 로드"""

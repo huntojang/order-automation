@@ -1,0 +1,44 @@
+{
+  "vendors": [
+    {
+      "id": "vendor_tumbler",
+      "name": "텀블러마켓",
+      "contact_person": "담당자",
+      "phone": "010-1111-0001",
+      "email": "",
+      "google_sheet_url": "https://docs.google.com/spreadsheets/d/1_k-R6eDMiij_76t8snTd5zflfzMP7Zlp8sZ4wbRgaKs"
+    },
+    {
+      "id": "vendor_eco",
+      "name": "에코용품사",
+      "contact_person": "담당자",
+      "phone": "010-1111-0002",
+      "email": "",
+      "google_sheet_url": "https://docs.google.com/spreadsheets/d/1eX8nUXunr5ovKIZuF34-hI5WRLLaZZclav8I-96lSI4"
+    },
+    {
+      "id": "vendor_lifestyle",
+      "name": "라이프스타일",
+      "contact_person": "담당자",
+      "phone": "010-1111-0003",
+      "email": "",
+      "google_sheet_url": "https://docs.google.com/spreadsheets/d/1STiy3gtEb3T0aF4_7aS8CJsbssa3xv8XGB90rCcW8yc"
+    },
+    {
+      "id": "vendor_homedeco",
+      "name": "홈데코",
+      "contact_person": "담당자",
+      "phone": "010-1111-0004",
+      "email": "",
+      "google_sheet_url": "https://docs.google.com/spreadsheets/d/1TWdjhNr-h82Dnb0utq0xc_3XRis9WOc2BKQ4DCbeiIc"
+    },
+    {
+      "id": "vendor_kitchen",
+      "name": "주방용품",
+      "contact_person": "담당자",
+      "phone": "010-1111-0005",
+      "email": "",
+      "google_sheet_url": "https://docs.google.com/spreadsheets/d/1EsZ9i_We0D9--0Y6P4E2T2t-bO4uy2QKIOTynJdCUng"
+    }
+  ]
+}
