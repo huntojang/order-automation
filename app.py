@@ -754,7 +754,7 @@ elif page == "📤 발주 업로드":
                         f"""<div class="list-row" style="margin-bottom:6px;">
                             <div style="flex:1;">
                                 <div class="list-name">{v['name']}{phone_text}</div>
-                                <div class="list-desc">{v['orders']}건 | 시트 업로드 {sheet_icon} | 알림톡 발송 {talk_icon}{link_html}</div>
+                                <div class="list-desc">{v['orders']}건 | 시트 업로드 {sheet_icon} | 알림톡 발송 완료 {talk_icon}{link_html}</div>
                             </div>
                         </div>""",
                         unsafe_allow_html=True
