@@ -165,17 +165,27 @@ class GoogleSheetClient:
 
             # 헤더 행 서식 적용 (굵게, 배경색)
             if len(data) > 0:
-                worksheet.format('A1:K1', {
+                num_cols = len(data[0])
+                last_col_letter = chr(ord('A') + num_cols - 1) if num_cols <= 26 else 'Z'
+                worksheet.format(f'A1:{last_col_letter}1', {
                     'textFormat': {'bold': True},
                     'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
                 })
 
-            # 송장번호 칸 노란색 강조 (J열: 택배사, K열: 송장번호)
+            # 송장번호/택배사 칸 노란색 강조 (헤더에서 위치 동적 탐색)
             if len(data) > 1:
                 last_row = len(data)
-                worksheet.format(f'J2:K{last_row}', {
-                    'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
-                })
+                headers = data[0]
+                highlight_indices = []
+                for keyword in ['택배사', '송장번호']:
+                    if keyword in headers:
+                        highlight_indices.append(headers.index(keyword))
+                if highlight_indices:
+                    for ci in highlight_indices:
+                        col_letter = chr(ord('A') + ci) if ci < 26 else 'Z'
+                        worksheet.format(f'{col_letter}2:{col_letter}{last_row}', {
+                            'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
+                        })
 
             logging.info(f'✅ 시트 업데이트 완료: {spreadsheet.title}')
             return True
@@ -342,6 +352,64 @@ class Logger:
             datefmt=date_format,
             handlers=handlers
         )
+
+
+class ExportFormatManager:
+    """업체별 내보내기 양식 관리"""
+
+    DEFAULT_COLUMNS = [
+        {"name": "주문일자", "sources": ["주문일자"]},
+        {"name": "주문번호", "sources": ["주문번호"]},
+        {"name": "수취인명", "sources": ["수취인명", "수령자 이름"]},
+        {"name": "연락처", "sources": ["연락처", "수령자 휴대폰번호", "수령자 전화"]},
+        {"name": "주소", "sources": ["주소", "수령자 주소"]},
+        {"name": "상품명", "sources": ["상품명"]},
+        {"name": "옵션", "sources": ["옵션", "옵션명"]},
+        {"name": "수량", "sources": ["수량", "상품수량"]},
+        {"name": "택배사", "sources": ["택배사"]},
+        {"name": "송장번호", "sources": ["송장번호"]},
+    ]
+
+    def __init__(self, config_dir='config'):
+        self.config_dir = config_dir
+        self.formats_file = os.path.join(config_dir, 'export_formats.json')
+
+    def load_all(self) -> Dict[str, Any]:
+        try:
+            with open(self.formats_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {"default": self.DEFAULT_COLUMNS, "vendors": {}}
+
+    def save_all(self, data: Dict[str, Any]):
+        os.makedirs(self.config_dir, exist_ok=True)
+        with open(self.formats_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def get_vendor_columns(self, vendor_name: str) -> List[Dict[str, Any]]:
+        data = self.load_all()
+        vendor_cols = data.get("vendors", {}).get(vendor_name)
+        if vendor_cols:
+            return vendor_cols
+        return data.get("default", self.DEFAULT_COLUMNS)
+
+    def set_vendor_columns(self, vendor_name: str, columns: List[Dict[str, Any]]):
+        data = self.load_all()
+        if "vendors" not in data:
+            data["vendors"] = {}
+        data["vendors"][vendor_name] = columns
+        self.save_all(data)
+
+    def reset_vendor(self, vendor_name: str):
+        data = self.load_all()
+        if vendor_name in data.get("vendors", {}):
+            del data["vendors"][vendor_name]
+            self.save_all(data)
+
+    def set_default_columns(self, columns: List[Dict[str, Any]]):
+        data = self.load_all()
+        data["default"] = columns
+        self.save_all(data)
 
 
 def validate_tracking_number(tracking_number: str, courier: str = None) -> bool:

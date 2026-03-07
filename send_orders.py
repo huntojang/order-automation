@@ -16,7 +16,7 @@ import requests
 
 from utils import (
     Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger,
-    get_today_str, get_latest_file
+    ExportFormatManager, get_today_str, get_latest_file
 )
 
 
@@ -114,35 +114,27 @@ def split_by_vendor(df: pd.DataFrame, vendor_column='공급처') -> dict:
     return vendor_data
 
 
-def prepare_sheet_data(df: pd.DataFrame) -> list:
+def prepare_sheet_data(df: pd.DataFrame, vendor_name: str = None) -> list:
     """
-    구글 시트에 업로드할 데이터 준비
+    구글 시트에 업로드할 데이터 준비 (업체별 양식 적용)
 
     Args:
         df: 업체별 주문 데이터
+        vendor_name: 업체명 (양식 설정 조회용)
 
     Returns:
         2차원 리스트 (헤더 포함)
     """
-    # 시트 헤더 → 원본 컬럼 매핑 (여러 형식 지원)
-    column_mapping = {
-        '주문일자': ['주문일자'],
-        '주문번호': ['주문번호'],
-        '수취인명': ['수취인명', '수령자 이름'],
-        '연락처': ['연락처', '수령자 휴대폰번호', '수령자 전화'],
-        '주소': ['주소', '수령자 주소'],
-        '상품명': ['상품명'],
-        '옵션': ['옵션', '옵션명'],
-        '수량': ['수량', '상품수량'],
-        '택배사': ['택배사'],
-        '송장번호': ['송장번호'],
-    }
+    fmt_mgr = ExportFormatManager()
+    if vendor_name:
+        columns = fmt_mgr.get_vendor_columns(vendor_name)
+    else:
+        columns = ExportFormatManager.DEFAULT_COLUMNS
 
-    sheet_headers = list(column_mapping.keys())
+    sheet_headers = [col["name"] for col in columns]
 
-    def find_value(row, candidates):
-        """여러 컬럼명 후보 중 값이 있는 것을 찾아 반환"""
-        for col in candidates:
+    def find_value(row, sources):
+        for col in sources:
             if col in df.columns:
                 val = row[col]
                 if not pd.isna(val) and str(val).strip() != '':
@@ -151,7 +143,7 @@ def prepare_sheet_data(df: pd.DataFrame) -> list:
 
     rows = []
     for _, row in df.iterrows():
-        new_row = [find_value(row, candidates) for candidates in column_mapping.values()]
+        new_row = [find_value(row, col["sources"]) for col in columns]
         rows.append(new_row)
 
     return [sheet_headers] + rows
@@ -292,7 +284,7 @@ def main():
         order_count = len(vendor_df)
 
         # 구글 시트 데이터 준비
-        sheet_data = prepare_sheet_data(vendor_df)
+        sheet_data = prepare_sheet_data(vendor_df, vendor_name=vendor_name)
 
         # 구글 시트 업데이트
         if sheet_client:

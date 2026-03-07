@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger
+from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger, ExportFormatManager
 
 # 페이지 설정 (파비콘을 커스텀 이미지로)
 from PIL import Image
@@ -373,25 +373,18 @@ def fetch_all_vendor_sheets(_client, vendors):
     return result
 
 
-def prepare_sheet_data(df):
-    """구글 시트에 업로드할 데이터 준비"""
-    column_mapping = {
-        '주문일자': ['주문일자'],
-        '주문번호': ['주문번호'],
-        '수취인명': ['수취인명', '수령자 이름'],
-        '연락처': ['연락처', '수령자 휴대폰번호', '수령자 전화'],
-        '주소': ['주소', '수령자 주소'],
-        '상품명': ['상품명'],
-        '옵션': ['옵션', '옵션명'],
-        '수량': ['수량', '상품수량'],
-        '택배사': ['택배사'],
-        '송장번호': ['송장번호'],
-    }
+def prepare_sheet_data(df, vendor_name=None):
+    """구글 시트에 업로드할 데이터 준비 (업체별 양식 적용)"""
+    fmt_mgr = ExportFormatManager()
+    if vendor_name:
+        columns = fmt_mgr.get_vendor_columns(vendor_name)
+    else:
+        columns = ExportFormatManager.DEFAULT_COLUMNS
 
-    sheet_headers = list(column_mapping.keys())
+    sheet_headers = [col["name"] for col in columns]
 
-    def find_value(row, candidates):
-        for col in candidates:
+    def find_value(row, sources):
+        for col in sources:
             if col in df.columns:
                 val = row[col]
                 if not pd.isna(val) and str(val).strip() != '':
@@ -400,7 +393,7 @@ def prepare_sheet_data(df):
 
     rows = []
     for _, row in df.iterrows():
-        new_row = [find_value(row, candidates) for candidates in column_mapping.values()]
+        new_row = [find_value(row, col["sources"]) for col in columns]
         rows.append(new_row)
 
     return [sheet_headers] + rows
@@ -427,7 +420,7 @@ with st.sidebar:
 
     page = st.radio(
         "메뉴",
-        ["🏠 홈", "📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드"],
+        ["🏠 홈", "📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드", "⚙️ 양식 설정"],
         label_visibility="collapsed"
     )
 
@@ -440,7 +433,7 @@ with st.sidebar:
 
 # ===== 홈/송장다운로드 페이지에서 송장 변경 감지 (30초 간격) =====
 # 발주 업로드 페이지에서는 autorefresh 끔 (업로드 중 리셋 방지)
-if page not in ["📊 송장 현황", "📤 발주 업로드"]:
+if page not in ["📊 송장 현황", "📤 발주 업로드", "⚙️ 양식 설정"]:
     bg_refresh = st_autorefresh(interval=30000, limit=None, key="bg_autorefresh")
 
     # 백그라운드 송장 체크 (캐시 활용, 에러 시 무시)
@@ -630,7 +623,7 @@ elif page == "📤 발주 업로드":
                         continue
 
                     vendor_df = vendor_data[vendor_name]
-                    sheet_data = prepare_sheet_data(vendor_df)
+                    sheet_data = prepare_sheet_data(vendor_df, vendor_name=vendor_name)
 
                     # 구글 시트 업로드
                     sheet_url = vendor_info.get('google_sheet_url', '')
@@ -769,10 +762,18 @@ elif page == "📊 송장 현황":
     vendors_info = load_vendors()
     sheet_client = get_sheet_client()
 
-    col_refresh, col_status = st.columns([1, 3])
+    # 업체 선택 필터
+    vendor_names = [v['name'] for v in (vendors_info or [])]
+    col_vendor, col_refresh, col_status = st.columns([2, 1, 3])
+    with col_vendor:
+        selected_vendor = st.selectbox(
+            "업체 선택", vendor_names,
+            label_visibility="collapsed",
+            key="invoice_vendor_filter"
+        )
     with col_refresh:
         if st.button("🔄 수동 새로고침"):
-            st.session_state['_sheet_cache_time'] = 0  # 캐시 만료시켜 즉시 재조회
+            st.session_state['_sheet_cache_time'] = 0
     with col_status:
         st.caption(f"🟢 자동 새로고침 활성 (15초 간격) | 마지막 확인: {datetime.now().strftime('%H:%M:%S')}")
 
@@ -780,37 +781,32 @@ elif page == "📊 송장 현황":
         # 캐시된 데이터 사용 (20초 TTL)
         all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
 
-        total_orders = 0
-        total_invoices = 0
+        # 전체 업체 상태 수집 (알림 감지용)
+        all_vendor_statuses = []
+        total_orders_all = 0
+        total_invoices_all = 0
 
-        vendor_statuses = []
-
-        for idx, vendor_info in enumerate(vendors_info):
+        for vendor_info in vendors_info:
             vendor_name = vendor_info['name']
             sheet_url = vendor_info.get('google_sheet_url', '')
-
             if not sheet_url:
                 continue
 
             data = all_sheets.get(vendor_name)
             if not data or len(data) < 2:
-                vendor_statuses.append({
+                all_vendor_statuses.append({
                     'name': vendor_name,
-                    'total': 0,
-                    'completed': 0,
-                    'pending': 0,
-                    'url': sheet_url
+                    'total': 0, 'completed': 0, 'pending': 0, 'url': sheet_url
                 })
                 continue
 
             df = pd.DataFrame(data[1:], columns=data[0])
             order_count = len(df)
             invoice_count = len(df[df.get('송장번호', pd.Series()).notna() & (df.get('송장번호', pd.Series()) != '')])
+            total_orders_all += order_count
+            total_invoices_all += invoice_count
 
-            total_orders += order_count
-            total_invoices += invoice_count
-
-            vendor_statuses.append({
+            all_vendor_statuses.append({
                 'name': vendor_name,
                 'total': order_count,
                 'completed': invoice_count,
@@ -822,62 +818,65 @@ elif page == "📊 송장 현황":
         prev_invoices = st.session_state.get('prev_invoice_count', None)
         prev_vendor_status = st.session_state.get('prev_vendor_status', {})
 
-        if prev_invoices is not None and total_invoices > prev_invoices:
-            new_count = total_invoices - prev_invoices
-            # 어떤 업체에서 새로 입력했는지 확인
-            for vs in vendor_statuses:
+        if prev_invoices is not None and total_invoices_all > prev_invoices:
+            for vs in all_vendor_statuses:
                 prev_count = prev_vendor_status.get(vs['name'], 0)
                 if vs['completed'] > prev_count:
                     diff = vs['completed'] - prev_count
                     st.toast(f"🔔 {vs['name']}에서 송장 {diff}건 새로 입력!", icon="🔔")
 
         # 현재 상태 저장
-        st.session_state['prev_invoice_count'] = total_invoices
-        st.session_state['prev_vendor_status'] = {vs['name']: vs['completed'] for vs in vendor_statuses}
-        st.session_state['invoice_count'] = total_invoices
-        st.session_state['pending_count'] = total_orders - total_invoices
+        st.session_state['prev_invoice_count'] = total_invoices_all
+        st.session_state['prev_vendor_status'] = {vs['name']: vs['completed'] for vs in all_vendor_statuses}
+        st.session_state['invoice_count'] = total_invoices_all
+        st.session_state['pending_count'] = total_orders_all - total_invoices_all
 
-        # 전체 요약
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("전체 주문", f"{total_orders}건")
-        with col2:
-            st.metric("송장 입력 완료", f"{total_invoices}건",
-                       delta=f"+{total_invoices - prev_invoices}건" if prev_invoices is not None and total_invoices > prev_invoices else None)
-        with col3:
-            st.metric("미입력", f"{total_orders - total_invoices}건")
+        # 선택된 업체 데이터만 필터링
+        my_status = next((vs for vs in all_vendor_statuses if vs['name'] == selected_vendor), None)
 
-        if total_orders > 0:
-            _pct = int(total_invoices / total_orders * 100)
-            st.markdown(f"""
-            <div style="margin:1rem 0;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;">
-                    <span style="color:#64748B;font-weight:500;">진행률</span>
-                    <span style="color:#0F172A;font-weight:600;">{total_invoices}/{total_orders} ({_pct}%)</span>
-                </div>
-                <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
-                    <div style="background:#4090C3;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
-                </div>
-            </div>""", unsafe_allow_html=True)
+        if my_status:
+            my_orders = my_status['total']
+            my_invoices = my_status['completed']
+            my_pending = my_status['pending']
 
-        # 업체별 상세
-        st.markdown("---")
-        st.markdown("### 업체별 상세 현황")
+            prev_my = prev_vendor_status.get(selected_vendor, 0)
+            delta_text = f"+{my_invoices - prev_my}건" if prev_invoices is not None and my_invoices > prev_my else None
 
-        for vs in vendor_statuses:
-            prev_count = prev_vendor_status.get(vs['name'], 0)
-            is_new = vs['completed'] > prev_count
-            is_done = vs['completed'] == vs['total'] and vs['total'] > 0
+            # 요약 카드
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("전체 주문", f"{my_orders}건")
+            with col2:
+                st.metric("송장 입력 완료", f"{my_invoices}건", delta=delta_text)
+            with col3:
+                st.metric("미입력", f"{my_pending}건")
 
-            new_badge = " 🆕" if is_new else ""
+            if my_orders > 0:
+                _pct = int(my_invoices / my_orders * 100)
+                st.markdown(f"""
+                <div style="margin:1rem 0;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;">
+                        <span style="color:#64748B;font-weight:500;">진행률</span>
+                        <span style="color:#0F172A;font-weight:600;">{my_invoices}/{my_orders} ({_pct}%)</span>
+                    </div>
+                    <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
+                        <div style="background:#4090C3;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
+                    </div>
+                </div>""", unsafe_allow_html=True)
+
+            # 내 업체 상세
+            st.markdown("---")
+            st.markdown(f"### {selected_vendor} 상세 현황")
+
+            is_done = my_invoices == my_orders and my_orders > 0
 
             if is_done:
                 status_badge = '<span style="background:#E8F5E9;color:#2E7D32;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">✅ 입력 완료</span>'
                 active_cls = "list-row-active"
-            elif vs['completed'] > 0:
-                status_badge = f'<span style="background:#FFF3E0;color:#E65100;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">⏳ {vs["completed"]}/{vs["total"]}건 입력</span>'
+            elif my_invoices > 0:
+                status_badge = f'<span style="background:#FFF3E0;color:#E65100;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">⏳ {my_invoices}/{my_orders}건 입력</span>'
                 active_cls = ""
-            elif vs['total'] > 0:
+            elif my_orders > 0:
                 status_badge = '<span style="background:#F1F5F9;color:#64748B;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">⏳ 대기중</span>'
                 active_cls = ""
             else:
@@ -887,27 +886,26 @@ elif page == "📊 송장 현황":
             st.markdown(f"""
             <div class="list-row {active_cls}">
                 <div style="flex:1;">
-                    <div class="list-name">{vs['name']}{new_badge}</div>
-                    <div class="list-desc">{vs['total']}건 주문</div>
+                    <div class="list-name">{selected_vendor}</div>
+                    <div class="list-desc">{my_orders}건 주문</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px;">
                     {status_badge}
-                    <a href="{vs['url']}" target="_blank" style="text-decoration:none;">
+                    <a href="{my_status['url']}" target="_blank" style="text-decoration:none;">
                         <div class="list-arrow">→</div>
                     </a>
                 </div>
             </div>""", unsafe_allow_html=True)
 
-        # 실시간 알림 로그
+        # 실시간 알림 로그 (내 업체만)
         st.markdown("---")
         st.markdown("### 🔔 알림 로그")
 
-        # 알림 로그 저장
         if 'notification_log' not in st.session_state:
             st.session_state['notification_log'] = []
 
-        if prev_invoices is not None and total_invoices > prev_invoices:
-            for vs in vendor_statuses:
+        if prev_invoices is not None and total_invoices_all > prev_invoices:
+            for vs in all_vendor_statuses:
                 prev_count = prev_vendor_status.get(vs['name'], 0)
                 if vs['completed'] > prev_count:
                     diff = vs['completed'] - prev_count
@@ -919,22 +917,21 @@ elif page == "📊 송장 현황":
                     }
                     st.session_state['notification_log'].insert(0, log_entry)
 
-        if st.session_state.get('notification_log'):
-            for log in st.session_state['notification_log'][:10]:
+        my_logs = [log for log in st.session_state.get('notification_log', []) if log['vendor'] == selected_vendor]
+        if my_logs:
+            for log in my_logs[:10]:
                 st.markdown(f"""
                 <div class="notification-bar">
-                    🔔 [{log['time']}] <strong>{log['vendor']}</strong>에서 송장번호 {log['count']}건 새로 입력! (총 {log['total']}건)
+                    🔔 [{log['time']}] 송장번호 {log['count']}건 새로 입력! (총 {log['total']}건)
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            if total_invoices > 0:
-                for vs in vendor_statuses:
-                    if vs['completed'] > 0:
-                        st.markdown(f"""
-                        <div class="notification-bar">
-                            🔔 {vs['name']}에서 송장번호 {vs['completed']}건 입력 완료
-                        </div>
-                        """, unsafe_allow_html=True)
+            if my_status and my_status['completed'] > 0:
+                st.markdown(f"""
+                <div class="notification-bar">
+                    🔔 송장번호 {my_status['completed']}건 입력 완료
+                </div>
+                """, unsafe_allow_html=True)
             else:
                 st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
 
@@ -1028,6 +1025,146 @@ elif page == "📥 송장 다운로드":
                 )
             else:
                 st.warning("수집된 송장이 없습니다. 업체에서 아직 입력하지 않았어요.")
+
+
+# ===== 양식 설정 =====
+elif page == "⚙️ 양식 설정":
+    st.markdown('<div class="main-header">⚙️ 양식 설정</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">업체별 내보내기 엑셀 양식(컬럼)을 설정합니다</div>', unsafe_allow_html=True)
+
+    fmt_mgr = ExportFormatManager()
+    fmt_data = fmt_mgr.load_all()
+    vendors_info = load_vendors()
+    vendor_names = ["(기본 양식)"] + [v["name"] for v in (vendors_info or [])]
+
+    selected = st.selectbox("업체 선택", vendor_names)
+
+    is_default = selected == "(기본 양식)"
+    if is_default:
+        current_columns = fmt_data.get("default", ExportFormatManager.DEFAULT_COLUMNS)
+        has_custom = False
+    else:
+        has_custom = selected in fmt_data.get("vendors", {})
+        current_columns = fmt_mgr.get_vendor_columns(selected)
+
+    if not is_default and has_custom:
+        st.info(f"'{selected}'에 커스텀 양식이 설정되어 있어요.")
+    elif not is_default:
+        st.caption("기본 양식을 사용 중이에요. 수정하면 이 업체 전용으로 저장돼요.")
+
+    # 세션에 편집 중인 컬럼 저장
+    edit_key = f"edit_cols_{selected}"
+    if edit_key not in st.session_state or st.session_state.get(f"_edit_vendor") != selected:
+        st.session_state[edit_key] = [dict(c) for c in current_columns]
+        st.session_state["_edit_vendor"] = selected
+
+    edit_columns = st.session_state[edit_key]
+
+    st.markdown("---")
+    st.markdown("### 컬럼 목록")
+    st.caption("'시트 컬럼명'은 구글 시트 헤더에 표시되고, '원본 컬럼명'은 엑셀에서 값을 찾을 컬럼이에요.")
+
+    to_delete = None
+    for i, col in enumerate(edit_columns):
+        c1, c2, c3 = st.columns([2, 4, 1])
+        with c1:
+            new_name = st.text_input(
+                "시트 컬럼명", value=col["name"], key=f"col_name_{selected}_{i}",
+                label_visibility="collapsed", placeholder="시트 컬럼명"
+            )
+            col["name"] = new_name
+        with c2:
+            sources_str = st.text_input(
+                "원본 컬럼명", value=", ".join(col["sources"]), key=f"col_src_{selected}_{i}",
+                label_visibility="collapsed", placeholder="원본 컬럼명 (쉼표로 구분)"
+            )
+            col["sources"] = [s.strip() for s in sources_str.split(",") if s.strip()]
+        with c3:
+            if st.button("🗑️", key=f"col_del_{selected}_{i}"):
+                to_delete = i
+
+    if to_delete is not None:
+        edit_columns.pop(to_delete)
+        st.session_state[edit_key] = edit_columns
+        st.rerun()
+
+    # 컬럼 추가
+    st.markdown("")
+    ac1, ac2, ac3 = st.columns([2, 4, 1])
+    with ac1:
+        new_col_name = st.text_input("새 컬럼명", key=f"new_col_name_{selected}",
+                                      label_visibility="collapsed", placeholder="새 컬럼명")
+    with ac2:
+        new_col_src = st.text_input("새 원본 컬럼명", key=f"new_col_src_{selected}",
+                                     label_visibility="collapsed", placeholder="원본 컬럼명 (쉼표 구분)")
+    with ac3:
+        if st.button("➕", key=f"add_col_{selected}"):
+            if new_col_name.strip():
+                sources = [s.strip() for s in new_col_src.split(",") if s.strip()]
+                if not sources:
+                    sources = [new_col_name.strip()]
+                edit_columns.append({"name": new_col_name.strip(), "sources": sources})
+                st.session_state[edit_key] = edit_columns
+                st.rerun()
+
+    st.markdown("---")
+
+    # 저장 / 초기화 버튼
+    btn1, btn2, btn3 = st.columns([2, 2, 2])
+    with btn1:
+        if st.button("💾 저장", type="primary", use_container_width=True):
+            valid_cols = [c for c in edit_columns if c["name"].strip() and c["sources"]]
+            if not valid_cols:
+                st.error("최소 1개 이상의 컬럼이 필요해요!")
+            else:
+                if is_default:
+                    fmt_mgr.set_default_columns(valid_cols)
+                else:
+                    fmt_mgr.set_vendor_columns(selected, valid_cols)
+                st.success("저장 완료!")
+                st.session_state[edit_key] = valid_cols
+    with btn2:
+        if st.button("🔄 기본값으로 초기화", use_container_width=True):
+            if is_default:
+                fmt_mgr.set_default_columns(ExportFormatManager.DEFAULT_COLUMNS)
+                st.session_state[edit_key] = [dict(c) for c in ExportFormatManager.DEFAULT_COLUMNS]
+            else:
+                fmt_mgr.reset_vendor(selected)
+                st.session_state[edit_key] = [dict(c) for c in fmt_data.get("default", ExportFormatManager.DEFAULT_COLUMNS)]
+            st.success("기본값으로 초기화했어요!")
+            st.rerun()
+    with btn3:
+        pass
+
+    # 미리보기
+    st.markdown("---")
+    st.markdown("### 📋 미리보기")
+    valid_cols = [c for c in edit_columns if c["name"].strip()]
+    if valid_cols:
+        preview_headers = [c["name"] for c in valid_cols]
+        preview_data = {h: ["(샘플 데이터)"] for h in preview_headers}
+        st.dataframe(pd.DataFrame(preview_data), use_container_width=True)
+    else:
+        st.warning("컬럼이 없어요!")
+
+    # 업체별 설정 현황
+    st.markdown("---")
+    st.markdown("### 📊 업체별 양식 설정 현황")
+    for v in (vendors_info or []):
+        vn = v["name"]
+        has = vn in fmt_data.get("vendors", {})
+        cols = fmt_mgr.get_vendor_columns(vn)
+        col_names = ", ".join([c["name"] for c in cols])
+        badge = "커스텀" if has else "기본"
+        badge_color = "#4090C3" if has else "#94A3B8"
+        st.markdown(f"""
+        <div class="list-row list-row-static">
+            <div style="flex:1;">
+                <div class="list-name">{vn}</div>
+                <div class="list-desc">{col_names}</div>
+            </div>
+            <span style="background:{badge_color};color:white;padding:4px 12px;border-radius:12px;font-size:0.78rem;font-weight:600;">{badge}</span>
+        </div>""", unsafe_allow_html=True)
 
 
 # ===== 사이드바 실시간 알림 (맨 마지막에 렌더링) =====
