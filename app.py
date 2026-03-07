@@ -1052,6 +1052,8 @@ elif page == "📥 송장 다운로드":
             if not courier_groups:
                 st.warning("택배사 정보가 없어요.")
             else:
+                courier_summary = ", ".join([f"{c} {len(g)}건" for c, g in courier_groups.items()])
+                st.caption(f"택배사별로 개별 엑셀 파일을 다운로드해요. ({courier_summary})")
                 for courier, group in courier_groups.items():
                     buffer = BytesIO()
                     group[available_cols].to_excel(buffer, index=False, engine='openpyxl')
