@@ -709,7 +709,7 @@ elif page == "📤 발주 업로드":
                     }}
                 </style>
                 """, unsafe_allow_html=True)
-                st.success(f"발주 완료! {success_count}개 업체에 총 {len(merged_df)}건 발주 처리")
+                st.success(f"발주 처리 완료! {success_count}개 업체에 총 {len(merged_df)}건 시트 업로드 + 카카오 알림톡 발송 완료")
 
         # 알림톡 발송 내역 (접기/펼치기)
         if st.session_state.get('alimtalk_logs'):
