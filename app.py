@@ -987,44 +987,98 @@ elif page == "📥 송장 다운로드":
 
             if all_invoices:
                 combined = pd.concat(all_invoices, ignore_index=True)
+                st.session_state['_download_combined'] = combined
 
-                st.markdown("---")
-                st.markdown(f"### 📊 수집 결과: 총 {len(combined)}건")
+            if not all_invoices:
+                st.warning("수집된 송장이 없습니다. 업체에서 아직 입력하지 않았어요.")
 
-                # 택배사별 분류
-                if '택배사' in combined.columns:
-                    courier_counts = combined['택배사'].value_counts()
-                    st.markdown("**택배사별 현황:**")
-                    for courier, count in courier_counts.items():
-                        if courier and courier.strip():
-                            st.write(f"  📦 {courier}: {count}건")
+    # 수집된 데이터가 있으면 다운로드 UI 표시
+    combined = st.session_state.get('_download_combined')
+    if combined is not None and len(combined) > 0:
+        today = datetime.now().strftime('%Y%m%d')
+        upload_columns = ['주문일자', '주문번호', '수취인명', '연락처', '주소',
+                          '상품명', '옵션', '수량', '택배사', '송장번호']
+        available_cols = [c for c in upload_columns if c in combined.columns]
 
-                # 미리보기
-                with st.expander("데이터 미리보기"):
-                    st.dataframe(combined, use_container_width=True)
+        st.markdown("---")
+        st.markdown(f"### 📊 수집 결과: 총 {len(combined)}건")
 
-                # 이지어드민용 엑셀 생성 (전체 데이터 포함)
-                upload_columns = ['주문일자', '주문번호', '수취인명', '연락처', '주소',
-                                  '상품명', '옵션', '수량', '택배사', '송장번호']
-                available_cols = [c for c in upload_columns if c in combined.columns]
-                upload_df = combined[available_cols]
+        # 택배사별 현황 카드
+        courier_groups = {}
+        if '택배사' in combined.columns:
+            for courier, group in combined.groupby('택배사'):
+                if courier and str(courier).strip():
+                    courier_groups[str(courier).strip()] = group
 
-                # 다운로드 버튼
+        if courier_groups:
+            courier_cols = st.columns(len(courier_groups))
+            for i, (courier, group) in enumerate(courier_groups.items()):
+                with courier_cols[i]:
+                    st.metric(f"📦 {courier}", f"{len(group)}건")
+
+        # 미리보기
+        with st.expander("데이터 미리보기"):
+            st.dataframe(combined[available_cols] if available_cols else combined, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### 📥 다운로드")
+
+        download_mode = st.radio(
+            "다운로드 방식",
+            ["전체 통합 (1개 파일)", "택배사별 분리 (시트 나눔)", "택배사별 개별 파일"],
+            horizontal=True,
+            label_visibility="visible"
+        )
+
+        if download_mode == "전체 통합 (1개 파일)":
+            buffer = BytesIO()
+            combined[available_cols].to_excel(buffer, index=False, engine='openpyxl')
+            buffer.seek(0)
+            st.download_button(
+                label=f"📥 전체 다운로드 (송장일괄등록_{today}.xlsx)",
+                data=buffer,
+                file_name=f"송장일괄등록_{today}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
+
+        elif download_mode == "택배사별 분리 (시트 나눔)":
+            if not courier_groups:
+                st.warning("택배사 정보가 없어요.")
+            else:
+                st.caption(f"1개 엑셀 파일 안에 택배사별 시트로 분리돼요. ({', '.join(courier_groups.keys())})")
                 buffer = BytesIO()
-                upload_df.to_excel(buffer, index=False, engine='openpyxl')
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    for courier, group in courier_groups.items():
+                        sheet_name = courier[:31]  # 시트명 31자 제한
+                        group[available_cols].to_excel(writer, sheet_name=sheet_name, index=False)
                 buffer.seek(0)
-
-                today = datetime.now().strftime('%Y%m%d')
                 st.download_button(
-                    label=f"📥 이지어드민용 엑셀 다운로드 (송장일괄등록_{today}.xlsx)",
+                    label=f"📥 택배사별 시트 다운로드 (송장_{today}_택배사별.xlsx)",
                     data=buffer,
-                    file_name=f"송장일괄등록_{today}.xlsx",
+                    file_name=f"송장_{today}_택배사별.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
                     use_container_width=True
                 )
+
+        elif download_mode == "택배사별 개별 파일":
+            if not courier_groups:
+                st.warning("택배사 정보가 없어요.")
             else:
-                st.warning("수집된 송장이 없습니다. 업체에서 아직 입력하지 않았어요.")
+                for courier, group in courier_groups.items():
+                    buffer = BytesIO()
+                    group[available_cols].to_excel(buffer, index=False, engine='openpyxl')
+                    buffer.seek(0)
+                    st.download_button(
+                        label=f"📦 {courier} — {len(group)}건 다운로드",
+                        data=buffer,
+                        file_name=f"송장_{today}_{courier}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key=f"dl_{courier}"
+                    )
 
 
 # ===== 양식 설정 =====
