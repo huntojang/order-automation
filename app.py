@@ -1054,63 +1054,126 @@ elif page == "⚙️ 양식 설정":
 
     # 세션에 편집 중인 컬럼 저장
     edit_key = f"edit_cols_{selected}"
-    if edit_key not in st.session_state or st.session_state.get(f"_edit_vendor") != selected:
+    if edit_key not in st.session_state or st.session_state.get("_edit_vendor") != selected:
         st.session_state[edit_key] = [dict(c) for c in current_columns]
         st.session_state["_edit_vendor"] = selected
 
     edit_columns = st.session_state[edit_key]
 
     st.markdown("---")
-    st.markdown("### 컬럼 목록")
-    st.caption("'시트 컬럼명'은 구글 시트 헤더에 표시되고, '원본 컬럼명'은 엑셀에서 값을 찾을 컬럼이에요.")
+
+    # 스프레드시트 스타일 HTML 렌더링
+    def col_letter(idx):
+        return chr(ord('A') + idx) if idx < 26 else f"A{chr(ord('A') + idx - 26)}"
+
+    header_cells = ""
+    name_cells = ""
+    source_cells = ""
+    sample_cells = ""
+    for i, col in enumerate(edit_columns):
+        letter = col_letter(i)
+        src_text = ", ".join(col.get("sources", []))
+        header_cells += f'<th class="sheet-col-letter">{letter}</th>'
+        name_cells += f'<td class="sheet-col-name">{col["name"]}</td>'
+        source_cells += f'<td class="sheet-col-source">{src_text}</td>'
+        sample_cells += f'<td class="sheet-col-sample">(샘플)</td>'
+
+    st.markdown(f"""
+    <style>
+        .sheet-table-wrap {{
+            overflow-x: auto; border-radius: 10px;
+            border: 1px solid #D0D7DE; margin-bottom: 0.5rem;
+        }}
+        .sheet-table {{
+            width: max-content; min-width: 100%; border-collapse: collapse;
+            font-size: 0.85rem; font-family: 'Inter', sans-serif;
+        }}
+        .sheet-table th, .sheet-table td {{
+            border: 1px solid #D0D7DE; text-align: center;
+            white-space: nowrap;
+        }}
+        .sheet-col-letter {{
+            background: #F0F3F6; color: #656D76; font-weight: 500;
+            padding: 4px 18px; font-size: 0.75rem;
+        }}
+        .sheet-col-name {{
+            background: #E8F5E9; color: #1B5E20; font-weight: 600;
+            padding: 8px 16px; min-width: 80px; font-size: 0.88rem;
+        }}
+        .sheet-col-source {{
+            background: #FAFBFC; color: #94A3B8; font-weight: 400;
+            padding: 5px 12px; font-size: 0.75rem;
+        }}
+        .sheet-col-sample {{
+            background: #fff; color: #CBD5E1; padding: 6px 16px;
+            font-size: 0.8rem;
+        }}
+    </style>
+    <div class="sheet-table-wrap">
+        <table class="sheet-table">
+            <tr>{header_cells}</tr>
+            <tr>{name_cells}</tr>
+            <tr>{source_cells}</tr>
+            <tr>{sample_cells}</tr>
+        </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.caption("초록 행 = 시트 컬럼명 / 회색 행 = 원본 엑셀 컬럼명 (매핑)")
+
+    # 컬럼 편집 컨트롤 (가로 배열)
+    num_cols = len(edit_columns)
+    max_display = min(num_cols + 1, 13)  # +1 for add button
+    col_widths = [1] * min(num_cols, 12) + ([1] if num_cols < 12 else [])
+    ui_cols = st.columns(max_display)
 
     to_delete = None
     for i, col in enumerate(edit_columns):
-        c1, c2, c3 = st.columns([2, 4, 1])
-        with c1:
-            new_name = st.text_input(
-                "시트 컬럼명", value=col["name"], key=f"col_name_{selected}_{i}",
-                label_visibility="collapsed", placeholder="시트 컬럼명"
-            )
-            col["name"] = new_name
-        with c2:
-            sources_str = st.text_input(
-                "원본 컬럼명", value=", ".join(col["sources"]), key=f"col_src_{selected}_{i}",
-                label_visibility="collapsed", placeholder="원본 컬럼명 (쉼표로 구분)"
-            )
-            col["sources"] = [s.strip() for s in sources_str.split(",") if s.strip()]
-        with c3:
-            if st.button("🗑️", key=f"col_del_{selected}_{i}"):
-                to_delete = i
+        if i >= 12:
+            break
+        with ui_cols[i]:
+            letter = col_letter(i)
+            with st.popover(f"✏️ {letter}", use_container_width=True):
+                new_name = st.text_input(
+                    "컬럼명", value=col["name"], key=f"col_name_{selected}_{i}",
+                    placeholder="시트 컬럼명"
+                )
+                col["name"] = new_name
+                sources_str = st.text_input(
+                    "원본 컬럼", value=", ".join(col["sources"]), key=f"col_src_{selected}_{i}",
+                    placeholder="원본 컬럼 (쉼표 구분)"
+                )
+                col["sources"] = [s.strip() for s in sources_str.split(",") if s.strip()]
+                if st.button("🗑️ 삭제", key=f"col_del_{selected}_{i}", use_container_width=True):
+                    to_delete = i
+
+    # 컬럼 추가 버튼
+    add_idx = min(num_cols, 12)
+    if add_idx < max_display:
+        with ui_cols[add_idx]:
+            with st.popover("➕", use_container_width=True):
+                new_col_name = st.text_input("새 컬럼명", key=f"new_col_name_{selected}",
+                                              placeholder="컬럼명 입력")
+                new_col_src = st.text_input("원본 컬럼", key=f"new_col_src_{selected}",
+                                             placeholder="원본 컬럼 (쉼표 구분)")
+                if st.button("추가", key=f"add_col_{selected}", use_container_width=True):
+                    if new_col_name.strip():
+                        sources = [s.strip() for s in new_col_src.split(",") if s.strip()]
+                        if not sources:
+                            sources = [new_col_name.strip()]
+                        edit_columns.append({"name": new_col_name.strip(), "sources": sources})
+                        st.session_state[edit_key] = edit_columns
+                        st.rerun()
 
     if to_delete is not None:
         edit_columns.pop(to_delete)
         st.session_state[edit_key] = edit_columns
         st.rerun()
 
-    # 컬럼 추가
-    st.markdown("")
-    ac1, ac2, ac3 = st.columns([2, 4, 1])
-    with ac1:
-        new_col_name = st.text_input("새 컬럼명", key=f"new_col_name_{selected}",
-                                      label_visibility="collapsed", placeholder="새 컬럼명")
-    with ac2:
-        new_col_src = st.text_input("새 원본 컬럼명", key=f"new_col_src_{selected}",
-                                     label_visibility="collapsed", placeholder="원본 컬럼명 (쉼표 구분)")
-    with ac3:
-        if st.button("➕", key=f"add_col_{selected}"):
-            if new_col_name.strip():
-                sources = [s.strip() for s in new_col_src.split(",") if s.strip()]
-                if not sources:
-                    sources = [new_col_name.strip()]
-                edit_columns.append({"name": new_col_name.strip(), "sources": sources})
-                st.session_state[edit_key] = edit_columns
-                st.rerun()
-
     st.markdown("---")
 
     # 저장 / 초기화 버튼
-    btn1, btn2, btn3 = st.columns([2, 2, 2])
+    btn1, btn2, _ = st.columns([2, 2, 2])
     with btn1:
         if st.button("💾 저장", type="primary", use_container_width=True):
             valid_cols = [c for c in edit_columns if c["name"].strip() and c["sources"]]
@@ -1133,35 +1196,22 @@ elif page == "⚙️ 양식 설정":
                 st.session_state[edit_key] = [dict(c) for c in fmt_data.get("default", ExportFormatManager.DEFAULT_COLUMNS)]
             st.success("기본값으로 초기화했어요!")
             st.rerun()
-    with btn3:
-        pass
-
-    # 미리보기
-    st.markdown("---")
-    st.markdown("### 📋 미리보기")
-    valid_cols = [c for c in edit_columns if c["name"].strip()]
-    if valid_cols:
-        preview_headers = [c["name"] for c in valid_cols]
-        preview_data = {h: ["(샘플 데이터)"] for h in preview_headers}
-        st.dataframe(pd.DataFrame(preview_data), use_container_width=True)
-    else:
-        st.warning("컬럼이 없어요!")
 
     # 업체별 설정 현황
     st.markdown("---")
-    st.markdown("### 📊 업체별 양식 설정 현황")
+    st.markdown("### 업체별 양식 현황")
     for v in (vendors_info or []):
         vn = v["name"]
         has = vn in fmt_data.get("vendors", {})
         cols = fmt_mgr.get_vendor_columns(vn)
-        col_names = ", ".join([c["name"] for c in cols])
+        col_names = " | ".join([c["name"] for c in cols])
         badge = "커스텀" if has else "기본"
         badge_color = "#4090C3" if has else "#94A3B8"
         st.markdown(f"""
         <div class="list-row list-row-static">
             <div style="flex:1;">
                 <div class="list-name">{vn}</div>
-                <div class="list-desc">{col_names}</div>
+                <div class="list-desc" style="font-family:monospace;font-size:0.78rem;">{col_names}</div>
             </div>
             <span style="background:{badge_color};color:white;padding:4px 12px;border-radius:12px;font-size:0.78rem;font-weight:600;">{badge}</span>
         </div>""", unsafe_allow_html=True)
