@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger, ExportFormatManager
+from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger
 
 # 페이지 설정 (파비콘을 커스텀 이미지로)
 from PIL import Image
@@ -373,18 +373,25 @@ def fetch_all_vendor_sheets(_client, vendors):
     return result
 
 
-def prepare_sheet_data(df, vendor_name=None):
-    """구글 시트에 업로드할 데이터 준비 (업체별 양식 적용)"""
-    fmt_mgr = ExportFormatManager()
-    if vendor_name:
-        columns = fmt_mgr.get_vendor_columns(vendor_name)
-    else:
-        columns = ExportFormatManager.DEFAULT_COLUMNS
+def prepare_sheet_data(df):
+    """구글 시트에 업로드할 데이터 준비"""
+    column_mapping = {
+        '주문일자': ['주문일자'],
+        '주문번호': ['주문번호'],
+        '수취인명': ['수취인명', '수령자 이름'],
+        '연락처': ['연락처', '수령자 휴대폰번호', '수령자 전화'],
+        '주소': ['주소', '수령자 주소'],
+        '상품명': ['상품명'],
+        '옵션': ['옵션', '옵션명'],
+        '수량': ['수량', '상품수량'],
+        '택배사': ['택배사'],
+        '송장번호': ['송장번호'],
+    }
 
-    sheet_headers = [col["name"] for col in columns]
+    sheet_headers = list(column_mapping.keys())
 
-    def find_value(row, sources):
-        for col in sources:
+    def find_value(row, candidates):
+        for col in candidates:
             if col in df.columns:
                 val = row[col]
                 if not pd.isna(val) and str(val).strip() != '':
@@ -393,7 +400,7 @@ def prepare_sheet_data(df, vendor_name=None):
 
     rows = []
     for _, row in df.iterrows():
-        new_row = [find_value(row, col["sources"]) for col in columns]
+        new_row = [find_value(row, candidates) for candidates in column_mapping.values()]
         rows.append(new_row)
 
     return [sheet_headers] + rows
@@ -420,7 +427,7 @@ with st.sidebar:
 
     page = st.radio(
         "메뉴",
-        ["🏠 홈", "📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드", "⚙️ 양식 설정"],
+        ["🏠 홈", "📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드"],
         label_visibility="collapsed"
     )
 
@@ -433,7 +440,7 @@ with st.sidebar:
 
 # ===== 홈/송장다운로드 페이지에서 송장 변경 감지 (30초 간격) =====
 # 발주 업로드 페이지에서는 autorefresh 끔 (업로드 중 리셋 방지)
-if page not in ["📊 송장 현황", "📤 발주 업로드", "⚙️ 양식 설정"]:
+if page not in ["📊 송장 현황", "📤 발주 업로드"]:
     bg_refresh = st_autorefresh(interval=30000, limit=None, key="bg_autorefresh")
 
     # 백그라운드 송장 체크 (캐시 활용, 에러 시 무시)
@@ -623,7 +630,7 @@ elif page == "📤 발주 업로드":
                         continue
 
                     vendor_df = vendor_data[vendor_name]
-                    sheet_data = prepare_sheet_data(vendor_df, vendor_name=vendor_name)
+                    sheet_data = prepare_sheet_data(vendor_df)
 
                     # 구글 시트 업로드
                     sheet_url = vendor_info.get('google_sheet_url', '')
@@ -1080,195 +1087,6 @@ elif page == "📥 송장 다운로드":
                         key=f"dl_{courier}"
                     )
 
-
-# ===== 양식 설정 =====
-elif page == "⚙️ 양식 설정":
-    st.markdown('<div class="main-header">⚙️ 양식 설정</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">업체별 내보내기 엑셀 양식(컬럼)을 설정합니다</div>', unsafe_allow_html=True)
-
-    fmt_mgr = ExportFormatManager()
-    fmt_data = fmt_mgr.load_all()
-    vendors_info = load_vendors()
-    vendor_names = ["(기본 양식)"] + [v["name"] for v in (vendors_info or [])]
-
-    selected = st.selectbox("업체 선택", vendor_names)
-
-    is_default = selected == "(기본 양식)"
-    if is_default:
-        current_columns = fmt_data.get("default", ExportFormatManager.DEFAULT_COLUMNS)
-        has_custom = False
-    else:
-        has_custom = selected in fmt_data.get("vendors", {})
-        current_columns = fmt_mgr.get_vendor_columns(selected)
-
-    if not is_default and has_custom:
-        st.info(f"'{selected}'에 커스텀 양식이 설정되어 있어요.")
-    elif not is_default:
-        st.caption("기본 양식을 사용 중이에요. 수정하면 이 업체 전용으로 저장돼요.")
-
-    # 세션에 편집 중인 컬럼 저장
-    edit_key = f"edit_cols_{selected}"
-    if edit_key not in st.session_state or st.session_state.get("_edit_vendor") != selected:
-        st.session_state[edit_key] = [dict(c) for c in current_columns]
-        st.session_state["_edit_vendor"] = selected
-
-    edit_columns = st.session_state[edit_key]
-
-    st.markdown("---")
-
-    # 스프레드시트 스타일 HTML 렌더링
-    def col_letter(idx):
-        return chr(ord('A') + idx) if idx < 26 else f"A{chr(ord('A') + idx - 26)}"
-
-    header_cells = ""
-    name_cells = ""
-    source_cells = ""
-    sample_cells = ""
-    for i, col in enumerate(edit_columns):
-        letter = col_letter(i)
-        src_text = ", ".join(col.get("sources", []))
-        header_cells += f'<th class="sheet-col-letter">{letter}</th>'
-        name_cells += f'<td class="sheet-col-name">{col["name"]}</td>'
-        source_cells += f'<td class="sheet-col-source">{src_text}</td>'
-        sample_cells += f'<td class="sheet-col-sample">(샘플)</td>'
-
-    st.markdown(f"""
-    <style>
-        .sheet-table-wrap {{
-            overflow-x: auto; border-radius: 10px;
-            border: 1px solid #D0D7DE; margin-bottom: 0.5rem;
-        }}
-        .sheet-table {{
-            width: max-content; min-width: 100%; border-collapse: collapse;
-            font-size: 0.85rem; font-family: 'Inter', sans-serif;
-        }}
-        .sheet-table th, .sheet-table td {{
-            border: 1px solid #D0D7DE; text-align: center;
-            white-space: nowrap;
-        }}
-        .sheet-col-letter {{
-            background: #F0F3F6; color: #656D76; font-weight: 500;
-            padding: 4px 18px; font-size: 0.75rem;
-        }}
-        .sheet-col-name {{
-            background: #E8F5E9; color: #1B5E20; font-weight: 600;
-            padding: 8px 16px; min-width: 80px; font-size: 0.88rem;
-        }}
-        .sheet-col-source {{
-            background: #FAFBFC; color: #94A3B8; font-weight: 400;
-            padding: 5px 12px; font-size: 0.75rem;
-        }}
-        .sheet-col-sample {{
-            background: #fff; color: #CBD5E1; padding: 6px 16px;
-            font-size: 0.8rem;
-        }}
-    </style>
-    <div class="sheet-table-wrap">
-        <table class="sheet-table">
-            <tr>{header_cells}</tr>
-            <tr>{name_cells}</tr>
-            <tr>{source_cells}</tr>
-            <tr>{sample_cells}</tr>
-        </table>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.caption("초록 행 = 시트 컬럼명 / 회색 행 = 원본 엑셀 컬럼명 (매핑)")
-
-    # 컬럼 편집 컨트롤 (가로 배열)
-    num_cols = len(edit_columns)
-    max_display = min(num_cols + 1, 13)  # +1 for add button
-    col_widths = [1] * min(num_cols, 12) + ([1] if num_cols < 12 else [])
-    ui_cols = st.columns(max_display)
-
-    to_delete = None
-    for i, col in enumerate(edit_columns):
-        if i >= 12:
-            break
-        with ui_cols[i]:
-            letter = col_letter(i)
-            with st.popover(f"✏️ {letter}", use_container_width=True):
-                new_name = st.text_input(
-                    "컬럼명", value=col["name"], key=f"col_name_{selected}_{i}",
-                    placeholder="시트 컬럼명"
-                )
-                col["name"] = new_name
-                sources_str = st.text_input(
-                    "원본 컬럼", value=", ".join(col["sources"]), key=f"col_src_{selected}_{i}",
-                    placeholder="원본 컬럼 (쉼표 구분)"
-                )
-                col["sources"] = [s.strip() for s in sources_str.split(",") if s.strip()]
-                if st.button("🗑️ 삭제", key=f"col_del_{selected}_{i}", use_container_width=True):
-                    to_delete = i
-
-    # 컬럼 추가 버튼
-    add_idx = min(num_cols, 12)
-    if add_idx < max_display:
-        with ui_cols[add_idx]:
-            with st.popover("➕", use_container_width=True):
-                new_col_name = st.text_input("새 컬럼명", key=f"new_col_name_{selected}",
-                                              placeholder="컬럼명 입력")
-                new_col_src = st.text_input("원본 컬럼", key=f"new_col_src_{selected}",
-                                             placeholder="원본 컬럼 (쉼표 구분)")
-                if st.button("추가", key=f"add_col_{selected}", use_container_width=True):
-                    if new_col_name.strip():
-                        sources = [s.strip() for s in new_col_src.split(",") if s.strip()]
-                        if not sources:
-                            sources = [new_col_name.strip()]
-                        edit_columns.append({"name": new_col_name.strip(), "sources": sources})
-                        st.session_state[edit_key] = edit_columns
-                        st.rerun()
-
-    if to_delete is not None:
-        edit_columns.pop(to_delete)
-        st.session_state[edit_key] = edit_columns
-        st.rerun()
-
-    st.markdown("---")
-
-    # 저장 / 초기화 버튼
-    btn1, btn2, _ = st.columns([2, 2, 2])
-    with btn1:
-        if st.button("💾 저장", type="primary", use_container_width=True):
-            valid_cols = [c for c in edit_columns if c["name"].strip() and c["sources"]]
-            if not valid_cols:
-                st.error("최소 1개 이상의 컬럼이 필요해요!")
-            else:
-                if is_default:
-                    fmt_mgr.set_default_columns(valid_cols)
-                else:
-                    fmt_mgr.set_vendor_columns(selected, valid_cols)
-                st.success("저장 완료!")
-                st.session_state[edit_key] = valid_cols
-    with btn2:
-        if st.button("🔄 기본값으로 초기화", use_container_width=True):
-            if is_default:
-                fmt_mgr.set_default_columns(ExportFormatManager.DEFAULT_COLUMNS)
-                st.session_state[edit_key] = [dict(c) for c in ExportFormatManager.DEFAULT_COLUMNS]
-            else:
-                fmt_mgr.reset_vendor(selected)
-                st.session_state[edit_key] = [dict(c) for c in fmt_data.get("default", ExportFormatManager.DEFAULT_COLUMNS)]
-            st.success("기본값으로 초기화했어요!")
-            st.rerun()
-
-    # 업체별 설정 현황
-    st.markdown("---")
-    st.markdown("### 업체별 양식 현황")
-    for v in (vendors_info or []):
-        vn = v["name"]
-        has = vn in fmt_data.get("vendors", {})
-        cols = fmt_mgr.get_vendor_columns(vn)
-        col_names = " | ".join([c["name"] for c in cols])
-        badge = "커스텀" if has else "기본"
-        badge_color = "#4090C3" if has else "#94A3B8"
-        st.markdown(f"""
-        <div class="list-row list-row-static">
-            <div style="flex:1;">
-                <div class="list-name">{vn}</div>
-                <div class="list-desc" style="font-family:monospace;font-size:0.78rem;">{col_names}</div>
-            </div>
-            <span style="background:{badge_color};color:white;padding:4px 12px;border-radius:12px;font-size:0.78rem;font-weight:600;">{badge}</span>
-        </div>""", unsafe_allow_html=True)
 
 
 # ===== 사이드바 실시간 알림 (맨 마지막에 렌더링) =====
