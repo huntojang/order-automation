@@ -677,9 +677,11 @@ elif page == "📤 발주 업로드":
                     if vn in vendor_data:
                         log_entry['vendors'].append({
                             'name': vn,
+                            'phone': vendor_info.get('phone', ''),
                             'orders': len(vendor_data[vn]),
                             'sheet_uploaded': True,
-                            'alimtalk_sent': True
+                            'alimtalk_sent': True,
+                            'sheet_url': vendor_info.get('google_sheet_url', '')
                         })
                 save_upload_log(log_entry)
 
@@ -744,9 +746,17 @@ elif page == "📤 발주 업로드":
                 for v in log.get('vendors', []):
                     sheet_icon = "✅" if v.get('sheet_uploaded') else "❌"
                     talk_icon = "✅" if v.get('alimtalk_sent') else "❌"
+                    phone = v.get('phone', '')
+                    sheet_url = v.get('sheet_url', '')
+                    phone_text = f" ({phone})" if phone else ""
+                    link_html = f' · <a href="{sheet_url}" target="_blank">시트 보기</a>' if sheet_url else ""
                     st.markdown(
-                        f"&nbsp;&nbsp;&nbsp;&nbsp;**{v['name']}** — {v['orders']}건 | "
-                        f"시트 업로드 {sheet_icon} | 알림톡 발송 {talk_icon}",
+                        f"""<div class="list-row" style="margin-bottom:6px;">
+                            <div style="flex:1;">
+                                <div class="list-name">{v['name']}{phone_text}</div>
+                                <div class="list-desc">{v['orders']}건 | 시트 업로드 {sheet_icon} | 알림톡 발송 {talk_icon}{link_html}</div>
+                            </div>
+                        </div>""",
                         unsafe_allow_html=True
                     )
     else:
