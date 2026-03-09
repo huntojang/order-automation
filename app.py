@@ -80,23 +80,22 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# CSS 스타일 — 메인
+# CSS 스타일 — 메인 (Green Modern)
 st.markdown("""
 <style>
     /* ===== 글로벌 ===== */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    .block-container { max-width: 1100px; padding-top: 2rem !important; }
-    [data-testid="stAppViewBlockContainer"] { padding-top: 2rem !important; }
-    /* autorefresh 등 hidden iframe이 높이 차지하지 않도록 */
+    .block-container { max-width: 1100px; padding-top: 1.5rem !important; }
+    [data-testid="stAppViewBlockContainer"] { padding-top: 1.5rem !important; }
     iframe[title="streamlit_autorefresh.st_autorefresh"] {
         position: absolute; height: 0 !important; overflow: hidden;
     }
 
     /* 로딩 스피너 */
     .stSpinner > div > div {
-        border: 3px solid #E2E8F0 !important;
-        border-top: 3px solid #4090C3 !important;
+        border: 3px solid #E8E8E8 !important;
+        border-top: 3px solid #2D6A4F !important;
         border-radius: 50% !important;
         width: 22px !important; height: 22px !important;
         animation: spin 0.7s linear infinite !important;
@@ -105,80 +104,69 @@ st.markdown("""
 
     /* ===== 헤더 ===== */
     .main-header {
-        font-size: 2rem; font-weight: 700; color: #0F172A;
-        margin-bottom: 0.25rem; letter-spacing: -0.02em;
+        font-size: 1.5rem; font-weight: 700; color: #1A1A1A;
+        margin-bottom: 1.25rem; letter-spacing: -0.03em;
     }
     .sub-header { display: none; }
-    .badge {
-        display: inline-block; border: 1px solid #CBD5E1; color: #64748B;
-        padding: 4px 14px; border-radius: 20px; font-size: 0.8rem;
-        font-weight: 500; margin-bottom: 12px;
+    .section-title {
+        font-size: 0.8rem; font-weight: 600; color: #999;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        margin-bottom: 0.75rem;
     }
 
     /* ===== 카드 ===== */
     .card {
-        background: #F8FAFC; border-radius: 16px; padding: 1.5rem;
-        border: 1px solid #E2E8F0; transition: all 0.2s ease;
+        background: #F5F5F5; border-radius: 16px; padding: 1.5rem;
+        border: none; transition: all 0.2s ease;
     }
-    .card:hover { border-color: #CBD5E1; box-shadow: 0 4px 12px rgba(0,0,0,0.04); }
-    .card-blue {
-        background: linear-gradient(135deg, #4090C3 0%, #5AACCF 100%);
-        border-radius: 16px; padding: 1.5rem; color: white; border: none;
+    .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+    .card-accent {
+        background: #2D6A4F; border-radius: 16px; padding: 1.5rem;
+        color: white; border: none;
     }
-    .card-blue .card-icon { background: rgba(255,255,255,0.2); }
-    .card-icon {
-        width: 42px; height: 42px; border-radius: 12px;
-        background: #EBF4FA; display: flex; align-items: center;
-        justify-content: center; font-size: 1.2rem; margin-bottom: 1rem;
-        color: #4090C3;
-    }
-    .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
-    .card-value { font-size: 2rem; font-weight: 700; margin-bottom: 2px; }
-    .card-desc { font-size: 0.85rem; color: #94A3B8; }
-    .card-blue .card-desc { color: rgba(255,255,255,0.7); }
-    .card-blue .card-title { color: rgba(255,255,255,0.85); }
-    .card-blue .card-value { color: #fff; }
+    .card-title { font-size: 0.85rem; font-weight: 500; color: #888; margin-bottom: 8px; }
+    .card-value { font-size: 2rem; font-weight: 700; color: #1A1A1A; margin-bottom: 2px; }
+    .card-desc { font-size: 0.8rem; color: #AAA; }
+    .card-accent .card-title { color: rgba(255,255,255,0.7); }
+    .card-accent .card-value { color: #fff; }
+    .card-accent .card-desc { color: rgba(255,255,255,0.5); }
 
     /* ===== 리스트 행 ===== */
     .list-row {
         display: flex; align-items: center; justify-content: space-between;
-        background: #F8FAFC; border-radius: 12px; padding: 1rem 1.25rem;
-        margin-bottom: 8px; border: 1px solid #E2E8F0;
+        background: #F5F5F5; border-radius: 14px; padding: 1rem 1.25rem;
+        margin-bottom: 8px; border: none;
         transition: all 0.2s ease;
     }
-    .list-row:hover { background: #F1F5F9; }
-    .list-row.list-row-static { cursor: default; }
-    .list-row.list-row-static:hover { background: #F8FAFC; }
-    .list-row.list-row-static.list-row-active:hover {
-        background: linear-gradient(90deg, #4090C3, #5AACCF);
-    }
+    .list-row:hover { background: #EFEFEF; }
     .list-row-active {
-        background: linear-gradient(90deg, #4090C3, #5AACCF);
+        background: #2D6A4F;
         color: white; border-color: transparent;
     }
-    .list-row-active .list-desc { color: rgba(255,255,255,0.7); }
-    .list-name { font-weight: 600; font-size: 0.95rem; }
-    .list-desc { font-size: 0.85rem; color: #64748B; }
+    .list-row-active:hover { background: #245C43; }
+    .list-row-active .list-desc { color: rgba(255,255,255,0.6); }
+    .list-name { font-weight: 600; font-size: 0.92rem; }
+    .list-desc { font-size: 0.82rem; color: #888; }
     .list-arrow {
-        width: 36px; height: 36px; border-radius: 50%;
-        background: #4090C3; color: white; display: flex;
-        align-items: center; justify-content: center; font-size: 1rem;
+        width: 34px; height: 34px; border-radius: 50%;
+        background: #2D6A4F; color: white; display: flex;
+        align-items: center; justify-content: center; font-size: 0.9rem;
         flex-shrink: 0;
     }
-    .list-row-active .list-arrow { background: rgba(255,255,255,0.25); }
+    .list-row-active .list-arrow { background: rgba(255,255,255,0.2); }
 
     /* ===== 카카오 메시지 ===== */
     .kakao-msg {
         background: #FEE500; color: #3C1E1E; padding: 1.25rem;
-        border-radius: 16px; margin: 0.5rem 0; font-size: 0.9rem;
+        border-radius: 16px; margin: 0.5rem 0; font-size: 0.88rem;
         max-width: 340px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }
 
     /* ===== 알림바 ===== */
     .notification-bar {
-        background: linear-gradient(90deg, #4090C3, #5AACCF);
-        color: white; padding: 0.8rem 1.2rem; border-radius: 10px;
-        margin: 0.5rem 0; font-size: 0.9rem;
+        background: #2D6A4F;
+        color: white; padding: 0.8rem 1.2rem; border-radius: 12px;
+        margin: 0.5rem 0; font-size: 0.88rem;
         animation: fadeIn 0.4s ease-out;
     }
     @keyframes fadeIn {
@@ -193,7 +181,7 @@ st.markdown("""
     /* ===== 상단 네비게이션 탭 ===== */
     .nav-tabs {
         display: flex; gap: 0; margin-bottom: 1.5rem;
-        border-bottom: 2px solid #E2E8F0;
+        border-bottom: 1px solid #E8E8E8;
     }
     .nav-tabs .stRadio > div {
         gap: 0 !important; flex-direction: row !important;
@@ -201,13 +189,13 @@ st.markdown("""
     .nav-tabs .stRadio > div[role="radiogroup"] > label {
         background: transparent;
         border: none;
-        border-bottom: 3px solid transparent;
+        border-bottom: 2px solid transparent;
         border-radius: 0;
-        padding: 12px 24px !important;
+        padding: 12px 28px !important;
         margin: 0 !important;
         font-weight: 500;
-        font-size: 0.95rem;
-        color: #64748B;
+        font-size: 0.9rem;
+        color: #999;
         cursor: pointer;
         transition: all 0.15s ease;
         display: flex;
@@ -215,70 +203,69 @@ st.markdown("""
         gap: 6px;
     }
     .nav-tabs .stRadio > div[role="radiogroup"] > label:hover {
-        color: #4090C3;
-        background: #F8FAFC;
+        color: #2D6A4F;
     }
     .nav-tabs .stRadio > div[role="radiogroup"] > label[data-checked="true"],
     .nav-tabs .stRadio > div[role="radiogroup"] > label:has(input:checked) {
-        color: #4090C3 !important;
+        color: #1A1A1A !important;
         font-weight: 700;
-        border-bottom: 3px solid #4090C3;
+        border-bottom: 2px solid #2D6A4F;
     }
-    /* 라디오 원형 동그라미 숨기기 */
     .nav-tabs .stRadio > div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
 
     /* ===== 버튼 ===== */
     .stButton > button[kind="primary"] {
-        background-color: #4090C3; border: none;
-        border-radius: 10px; padding: 0.6rem 1.5rem;
-        font-weight: 600; font-size: 0.95rem;
+        background-color: #2D6A4F; border: none;
+        border-radius: 12px; padding: 0.65rem 1.5rem;
+        font-weight: 600; font-size: 0.92rem;
         transition: all 0.2s ease;
     }
     .stButton > button[kind="primary"]:hover {
-        background-color: #357DA8; box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+        background-color: #245C43; box-shadow: 0 4px 16px rgba(45,106,79,0.25);
     }
     .stButton > button {
-        border-radius: 10px; font-weight: 500;
+        border-radius: 12px; font-weight: 500;
     }
 
     /* ===== 프로그레스바 ===== */
-    .stProgress > div > div > div { background-color: #4090C3; border-radius: 8px; }
-    .stProgress > div > div { background-color: #E2E8F0; border-radius: 8px; }
+    .stProgress > div > div > div { background-color: #2D6A4F; border-radius: 8px; }
+    .stProgress > div > div { background-color: #E8E8E8; border-radius: 8px; }
 
     /* ===== metric 카드 ===== */
     [data-testid="stMetric"] {
-        background: #F8FAFC; border: 1px solid #E2E8F0;
-        border-radius: 14px; padding: 1.2rem;
+        background: #F5F5F5; border: none;
+        border-radius: 16px; padding: 1.2rem;
     }
-    [data-testid="stMetricValue"] { color: #0F172A; font-weight: 700; }
-    [data-testid="stMetricLabel"] { color: #64748B; font-weight: 500; }
+    [data-testid="stMetricValue"] { color: #1A1A1A; font-weight: 700; }
+    [data-testid="stMetricLabel"] { color: #888; font-weight: 500; }
     [data-testid="stMetricDelta"] svg { display: none; }
 
     /* ===== 파일 업로더 ===== */
-    [data-testid="stFileUploader"] {
-        border-radius: 14px;
-    }
+    [data-testid="stFileUploader"] { border-radius: 16px; }
     [data-testid="stFileUploader"] > div > div {
-        border-radius: 14px; border: 2px dashed #CBD5E1;
-        background: #FAFBFC;
+        border-radius: 16px; border: 2px dashed #D5D5D5;
+        background: #FAFAFA;
     }
 
     /* ===== expander ===== */
     .streamlit-expanderHeader {
-        background: #F8FAFC; border-radius: 10px;
+        background: #F5F5F5; border-radius: 12px;
         font-weight: 500;
     }
 
     /* ===== 다운로드 버튼 ===== */
     .stDownloadButton > button {
-        background-color: #4090C3; color: white; border: none;
-        border-radius: 10px; font-weight: 600;
+        background-color: #2D6A4F; color: white; border: none;
+        border-radius: 12px; font-weight: 600;
     }
     .stDownloadButton > button:hover {
-        background-color: #357DA8;
+        background-color: #245C43;
     }
+
+    /* ===== 구분선 ===== */
+    hr { border-color: #EBEBEB !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -405,7 +392,7 @@ with _col_logo:
 st.markdown('<div class="nav-tabs">', unsafe_allow_html=True)
 page = st.radio(
     "메뉴",
-    ["📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드"],
+    ["발주 업로드", "송장 현황", "송장 다운로드"],
     horizontal=True,
     label_visibility="collapsed"
 )
@@ -414,7 +401,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (30초 간격) =====
 # 발주 업로드 / 송장 현황 페이지에서는 autorefresh 끔
-if page == "📥 송장 다운로드":
+if page == "송장 다운로드":
     bg_refresh = st_autorefresh(interval=30000, limit=None, key="bg_autorefresh")
 
     # 백그라운드 송장 체크 (캐시 활용, 에러 시 무시)
@@ -441,7 +428,7 @@ if page == "📥 송장 다운로드":
                     _pc = _prev_vs.get(_vn, 0)
                     if _vc > _pc:
                         _diff = _vc - _pc
-                        st.toast(f"🔔 {_vn}에서 송장 {_diff}건 새로 입력!", icon="🔔")
+                        st.toast(f"{_vn} 송장 +{_diff}건")
 
             st.session_state['prev_invoice_count'] = _bg_total_invoices
             st.session_state['prev_vendor_status'] = _bg_vendor_status
@@ -450,9 +437,8 @@ if page == "📥 송장 다운로드":
 
 
 # ===== 발주 업로드 =====
-if page == "📤 발주 업로드":
-    st.markdown('<div class="main-header">📤 발주 업로드</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">이지어드민 엑셀 파일을 업로드하면 자동으로 처리됩니다</div>', unsafe_allow_html=True)
+if page == "발주 업로드":
+    st.markdown('<div class="main-header">발주 업로드</div>', unsafe_allow_html=True)
 
     uploaded_files = st.file_uploader(
         "이지어드민 발주서 엑셀/CSV 파일을 올려주세요",
@@ -469,19 +455,19 @@ if page == "📤 발주 업로드":
             else:
                 df = pd.read_excel(f, engine='openpyxl')
             all_dfs.append(df)
-            st.success(f"✅ {f.name} — {len(df)}건 로드")
+            st.success(f"{f.name} — {len(df)}건 로드")
 
         merged_df = pd.concat(all_dfs, ignore_index=True)
-        st.info(f"📊 총 주문 건수: **{len(merged_df)}건**")
+        st.info(f"총 주문 건수: **{len(merged_df)}건**")
 
         # 미리보기
-        with st.expander("📋 데이터 미리보기", expanded=False):
+        with st.expander("데이터 미리보기", expanded=False):
             st.dataframe(merged_df.head(10), use_container_width=True)
 
         # 공급처별 분류
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
-            st.markdown("### 📦 공급처별 주문 현황")
+            st.markdown('<div class="section-title">공급처별 주문 현황</div>', unsafe_allow_html=True)
             cols = st.columns(len(vendor_data))
             for i, (name, vdf) in enumerate(vendor_data.items()):
                 with cols[i % len(cols)]:
@@ -490,7 +476,7 @@ if page == "📤 발주 업로드":
         st.markdown("---")
 
         # 발주 실행 버튼
-        if st.button("🚀 발주 실행 (시트 업로드 + 알림 발송)", type="primary", use_container_width=True):
+        if st.button("발주 실행", type="primary", use_container_width=True):
             vendors_info = load_vendors()
             sheet_client = get_sheet_client()
 
@@ -509,7 +495,7 @@ if page == "📤 발주 업로드":
 
                     if vendor_name not in vendor_data:
                         with status_container:
-                            st.warning(f"⏭️ {vendor_name} — 주문 없음")
+                            st.warning(f"{vendor_name} — 주문 없음")
                         continue
 
                     vendor_df = vendor_data[vendor_name]
@@ -521,11 +507,11 @@ if page == "📤 발주 업로드":
                         result = sheet_client.update_sheet(sheet_url, sheet_data)
                         if result:
                             with status_container:
-                                st.success(f"✅ {vendor_name} — {len(vendor_df)}건 시트 업로드 완료")
+                                st.success(f"{vendor_name} — {len(vendor_df)}건 업로드 완료")
                             success_count += 1
                         else:
                             with status_container:
-                                st.error(f"❌ {vendor_name} — 시트 업로드 실패")
+                                st.error(f"{vendor_name} — 업로드 실패")
 
                     time.sleep(0.3)
 
@@ -606,23 +592,23 @@ if page == "📤 발주 업로드":
         # 알림톡 발송 내역
         if st.session_state.get('alimtalk_logs'):
             st.markdown("---")
-            st.markdown("### 📱 카카오 알림톡 발송 현황")
+            st.markdown('<div class="section-title">알림톡 발송 현황</div>', unsafe_allow_html=True)
             _date = st.session_state.get('alimtalk_date', '')
             for _al in st.session_state['alimtalk_logs']:
                 _sent = _al.get('sent', False)
-                _icon = "✅" if _sent else "⚠️"
-                _status = "발송 완료" if _sent else "미발송 (설정 필요)"
+                _status = "발송 완료" if _sent else "미설정"
+                _cls = "list-row-active" if _sent else ""
                 st.markdown(f"""
-                <div class="list-row list-row-active">
+                <div class="list-row {_cls}">
                     <div style="flex:1;">
-                        <div class="list-name">{_icon} {_al['name']}</div>
-                        <div class="list-desc" style="color:rgba(255,255,255,0.7);">{_al['phone']} · {_al['count']}건 발주 알림톡 {_status}</div>
+                        <div class="list-name">{_al['name']}</div>
+                        <div class="list-desc" style="{'color:rgba(255,255,255,0.6);' if _sent else ''}">{_al['phone']} · {_al['count']}건 · {_status}</div>
                     </div>
                     <a href="{_al['sheet_url']}" target="_blank" style="text-decoration:none;">
                         <div class="list-arrow">→</div>
                     </a>
                 </div>""", unsafe_allow_html=True)
-            with st.expander("📨 발송된 메시지 미리보기"):
+            with st.expander("발송된 메시지 미리보기"):
                 for _al in st.session_state['alimtalk_logs']:
                     st.markdown(f"""
                     <div class="kakao-msg">
@@ -638,24 +624,23 @@ if page == "📤 발주 업로드":
 
     # 발주 업로드 기록
     st.markdown("---")
-    st.markdown("### 📋 발주 업로드 기록")
+    st.markdown('<div class="section-title">업로드 기록</div>', unsafe_allow_html=True)
 
     upload_history = load_upload_history()
     if upload_history:
         for log in upload_history[:10]:
-            with st.expander(f"📅 {log['date']} | 파일: {', '.join(log['files'])} | 총 {log['total_orders']}건"):
+            with st.expander(f"{log['date']}  |  {', '.join(log['files'])}  |  {log['total_orders']}건"):
                 for v in log.get('vendors', []):
-                    sheet_icon = "✅" if v.get('sheet_uploaded') else "❌"
-                    talk_icon = "✅" if v.get('alimtalk_sent') else "❌"
                     phone = v.get('phone', '')
                     sheet_url = v.get('sheet_url', '')
-                    phone_text = f" ({phone})" if phone else ""
-                    link_html = f' · <a href="{sheet_url}" target="_blank">시트 보기</a>' if sheet_url else ""
+                    sheet_status = "완료" if v.get('sheet_uploaded') else "—"
+                    talk_status = "완료" if v.get('alimtalk_sent') else "—"
+                    link_html = f' · <a href="{sheet_url}" target="_blank" style="color:#2D6A4F;">시트</a>' if sheet_url else ""
                     st.markdown(
                         f"""<div class="list-row" style="margin-bottom:6px;">
                             <div style="flex:1;">
-                                <div class="list-name">{v['name']}{phone_text}</div>
-                                <div class="list-desc">{v['orders']}건 | 시트 업로드 {sheet_icon} | 알림톡 발송 완료 {talk_icon}{link_html}</div>
+                                <div class="list-name">{v['name']}</div>
+                                <div class="list-desc">{v['orders']}건 · 업로드 {sheet_status} · 알림톡 {talk_status}{link_html}</div>
                             </div>
                         </div>""",
                         unsafe_allow_html=True
@@ -665,9 +650,8 @@ if page == "📤 발주 업로드":
 
 
 # ===== 송장 현황 =====
-elif page == "📊 송장 현황":
-    st.markdown('<div class="main-header">📊 송장 현황</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">각 업체의 송장번호 입력 현황을 실시간으로 확인합니다</div>', unsafe_allow_html=True)
+elif page == "송장 현황":
+    st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
     # 15초마다 자동 새로고침
     refresh_count = st_autorefresh(interval=15000, limit=None, key="invoice_autorefresh")
@@ -677,10 +661,10 @@ elif page == "📊 송장 현황":
 
     col_refresh, col_status = st.columns([1, 3])
     with col_refresh:
-        if st.button("🔄 수동 새로고침"):
+        if st.button("새로고침"):
             st.session_state['_sheet_cache_time'] = 0
     with col_status:
-        st.caption(f"🟢 자동 새로고침 활성 (15초 간격) | 마지막 확인: {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 새로고침 (15초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and vendors_info:
         all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
@@ -725,7 +709,7 @@ elif page == "📊 송장 현황":
                 prev_count = prev_vendor_status.get(vs['name'], 0)
                 if vs['completed'] > prev_count:
                     diff = vs['completed'] - prev_count
-                    st.toast(f"🔔 {vs['name']}에서 송장 {diff}건 새로 입력!", icon="🔔")
+                    st.toast(f"{vs['name']} 송장 +{diff}건")
 
         st.session_state['prev_invoice_count'] = total_invoices
         st.session_state['prev_vendor_status'] = {vs['name']: vs['completed'] for vs in vendor_statuses}
@@ -751,39 +735,39 @@ elif page == "📊 송장 현황":
                     <span style="color:#0F172A;font-weight:600;">{total_invoices}/{total_orders} ({_pct}%)</span>
                 </div>
                 <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
-                    <div style="background:#4090C3;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
+                    <div style="background:#2D6A4F;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
         # 전체 업체 상세 현황
         st.markdown("---")
-        st.markdown("### 업체별 상세 현황")
+        st.markdown('<div class="section-title">업체별 상세</div>', unsafe_allow_html=True)
 
         for vs in vendor_statuses:
             prev_count = prev_vendor_status.get(vs['name'], 0)
             is_new = vs['completed'] > prev_count
             is_done = vs['completed'] == vs['total'] and vs['total'] > 0
 
-            new_badge = " 🆕" if is_new else ""
+            new_badge = ' <span style="color:#2D6A4F;font-size:0.75rem;font-weight:600;">NEW</span>' if is_new else ""
 
             if is_done:
-                status_badge = '<span style="background:#E8F5E9;color:#2E7D32;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">✅ 입력 완료</span>'
+                status_badge = '<span style="background:#E8F5E9;color:#2D6A4F;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">완료</span>'
                 active_cls = "list-row-active"
             elif vs['completed'] > 0:
-                status_badge = f'<span style="background:#FFF3E0;color:#E65100;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">⏳ {vs["completed"]}/{vs["total"]}건 입력</span>'
+                status_badge = f'<span style="background:#FFF8E1;color:#B8860B;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">{vs["completed"]}/{vs["total"]}</span>'
                 active_cls = ""
             elif vs['total'] > 0:
-                status_badge = '<span style="background:#F1F5F9;color:#64748B;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">⏳ 대기중</span>'
+                status_badge = '<span style="background:#F5F5F5;color:#999;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">대기</span>'
                 active_cls = ""
             else:
-                status_badge = '<span style="background:#F1F5F9;color:#94A3B8;padding:5px 14px;border-radius:20px;font-size:0.8rem;font-weight:600;">— 주문 없음</span>'
+                status_badge = '<span style="background:#F5F5F5;color:#CCC;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">—</span>'
                 active_cls = ""
 
             st.markdown(f"""
             <div class="list-row {active_cls}">
                 <div style="flex:1;">
                     <div class="list-name">{vs['name']}{new_badge}</div>
-                    <div class="list-desc">{vs['total']}건 주문</div>
+                    <div class="list-desc">{vs['total']}건</div>
                 </div>
                 <div style="display:flex;align-items:center;gap:10px;">
                     {status_badge}
@@ -795,7 +779,7 @@ elif page == "📊 송장 현황":
 
         # 알림 로그
         st.markdown("---")
-        st.markdown("### 🔔 알림 로그")
+        st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
 
         if 'notification_log' not in st.session_state:
             st.session_state['notification_log'] = []
@@ -816,7 +800,7 @@ elif page == "📊 송장 현황":
             for log in st.session_state['notification_log'][:10]:
                 st.markdown(f"""
                 <div class="notification-bar">
-                    🔔 [{log['time']}] <strong>{log['vendor']}</strong>에서 송장번호 {log['count']}건 새로 입력! (총 {log['total']}건)
+                    [{log['time']}] <strong>{log['vendor']}</strong> 송장 +{log['count']}건 (총 {log['total']}건)
                 </div>
                 """, unsafe_allow_html=True)
         else:
@@ -825,7 +809,7 @@ elif page == "📊 송장 현황":
                     if vs['completed'] > 0:
                         st.markdown(f"""
                         <div class="notification-bar">
-                            🔔 {vs['name']}에서 송장번호 {vs['completed']}건 입력 완료
+                            {vs['name']} 송장 {vs['completed']}건 입력 완료
                         </div>
                         """, unsafe_allow_html=True)
             else:
@@ -836,14 +820,13 @@ elif page == "📊 송장 현황":
 
 
 # ===== 송장 다운로드 =====
-elif page == "📥 송장 다운로드":
-    st.markdown('<div class="main-header">📥 송장 다운로드</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">입력된 송장번호를 수집하여 이지어드민 업로드용 엑셀을 생성합니다</div>', unsafe_allow_html=True)
+elif page == "송장 다운로드":
+    st.markdown('<div class="main-header">송장 다운로드</div>', unsafe_allow_html=True)
 
     vendors_info = load_vendors()
     sheet_client = get_sheet_client()
 
-    if st.button("📥 송장 수집 시작", type="primary", use_container_width=True):
+    if st.button("송장 수집", type="primary", use_container_width=True):
         if not sheet_client:
             st.error("구글 시트 연결이 필요합니다")
         else:
@@ -875,9 +858,9 @@ elif page == "📥 송장 다운로드":
                     df_with_invoice = df_with_invoice.copy()
                     df_with_invoice['공급처'] = vendor_name
                     all_invoices.append(df_with_invoice)
-                    st.success(f"✅ {vendor_name} — {len(df_with_invoice)}건 수집")
+                    st.success(f"{vendor_name} — {len(df_with_invoice)}건 수집")
                 else:
-                    st.info(f"⏳ {vendor_name} — 입력된 송장 없음")
+                    st.info(f"{vendor_name} — 입력된 송장 없음")
 
             progress.progress(1.0, text="수집 완료!")
 
@@ -897,7 +880,7 @@ elif page == "📥 송장 다운로드":
         available_cols = [c for c in upload_columns if c in combined.columns]
 
         st.markdown("---")
-        st.markdown(f"### 📊 수집 결과: 총 {len(combined)}건")
+        st.markdown(f'<div class="section-title">수집 결과: {len(combined)}건</div>', unsafe_allow_html=True)
 
         # 택배사별 현황 카드
         courier_groups = {}
@@ -910,14 +893,14 @@ elif page == "📥 송장 다운로드":
             courier_cols = st.columns(len(courier_groups))
             for i, (courier, group) in enumerate(courier_groups.items()):
                 with courier_cols[i]:
-                    st.metric(f"📦 {courier}", f"{len(group)}건")
+                    st.metric(courier, f"{len(group)}건")
 
         # 미리보기
         with st.expander("데이터 미리보기"):
             st.dataframe(combined[available_cols] if available_cols else combined, use_container_width=True)
 
         st.markdown("---")
-        st.markdown("### 📥 다운로드")
+        st.markdown('<div class="section-title">다운로드</div>', unsafe_allow_html=True)
 
         download_mode = st.radio(
             "다운로드 방식",
@@ -931,7 +914,7 @@ elif page == "📥 송장 다운로드":
             combined[available_cols].to_excel(buffer, index=False, engine='openpyxl')
             buffer.seek(0)
             st.download_button(
-                label=f"📥 전체 다운로드 (송장일괄등록_{today}.xlsx)",
+                label=f"전체 다운로드 (송장일괄등록_{today}.xlsx)",
                 data=buffer,
                 file_name=f"송장일괄등록_{today}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -951,7 +934,7 @@ elif page == "📥 송장 다운로드":
                         group[available_cols].to_excel(writer, sheet_name=sheet_name, index=False)
                 buffer.seek(0)
                 st.download_button(
-                    label=f"📥 택배사별 시트 다운로드 (송장_{today}_택배사별.xlsx)",
+                    label=f"택배사별 시트 다운로드 (송장_{today}_택배사별.xlsx)",
                     data=buffer,
                     file_name=f"송장_{today}_택배사별.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -970,7 +953,7 @@ elif page == "📥 송장 다운로드":
                     group[available_cols].to_excel(buffer, index=False, engine='openpyxl')
                     buffer.seek(0)
                     st.download_button(
-                        label=f"📦 {courier} — {len(group)}건 다운로드",
+                        label=f"{courier} — {len(group)}건 다운로드",
                         data=buffer,
                         file_name=f"송장_{today}_{courier}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
