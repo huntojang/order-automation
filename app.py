@@ -22,7 +22,7 @@ st.set_page_config(
     page_title="발주도우미",
     page_icon=_favicon,
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # 우측 상단 running 아이콘을 커스텀 로고 애니메이션으로 교체
@@ -186,68 +186,48 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ===== 사이드바 ===== */
-    [data-testid="stSidebar"] {
-        background-color: #FAFBFC; border-right: 1px solid #E2E8F0;
+    /* ===== 사이드바 숨기기 ===== */
+    [data-testid="stSidebar"] { display: none !important; }
+    button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+
+    /* ===== 상단 네비게이션 탭 ===== */
+    .nav-tabs {
+        display: flex; gap: 0; margin-bottom: 1.5rem;
+        border-bottom: 2px solid #E2E8F0;
     }
-    /* 사이드바 내부 구분선 제거 */
-    [data-testid="stSidebar"] hr {
-        display: none;
+    .nav-tabs .stRadio > div {
+        gap: 0 !important; flex-direction: row !important;
     }
-    /* 라디오 버튼 → 네비게이션 버튼 스타일 */
-    [data-testid="stSidebar"] .stRadio > div {
-        gap: 4px !important;
-    }
-    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label {
+    .nav-tabs .stRadio > div[role="radiogroup"] > label {
         background: transparent;
         border: none;
-        border-radius: 10px;
-        padding: 10px 14px !important;
+        border-bottom: 3px solid transparent;
+        border-radius: 0;
+        padding: 12px 24px !important;
         margin: 0 !important;
         font-weight: 500;
-        font-size: 0.92rem;
+        font-size: 0.95rem;
         color: #64748B;
         cursor: pointer;
         transition: all 0.15s ease;
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
     }
-    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {
-        background: #EBF4FA;
+    .nav-tabs .stRadio > div[role="radiogroup"] > label:hover {
         color: #4090C3;
+        background: #F8FAFC;
     }
-    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label[data-checked="true"],
-    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:has(input:checked) {
-        background: rgba(64,144,195,0.2);
+    .nav-tabs .stRadio > div[role="radiogroup"] > label[data-checked="true"],
+    .nav-tabs .stRadio > div[role="radiogroup"] > label:has(input:checked) {
         color: #4090C3 !important;
-        font-weight: 600;
+        font-weight: 700;
+        border-bottom: 3px solid #4090C3;
     }
     /* 라디오 원형 동그라미 숨기기 */
-    [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label > div:first-child {
+    .nav-tabs .stRadio > div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
-    /* 사이드바 알림 섹션 */
-    .sidebar-section-title {
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: #94A3B8;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        padding: 0 14px;
-        margin-top: 1.5rem;
-        margin-bottom: 0.5rem;
-    }
-    .sidebar-noti-item {
-        background: #EBF4FA;
-        border-left: 3px solid #4090C3;
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin: 0 8px 6px 8px;
-        font-size: 0.78rem;
-        color: #1E293B;
-    }
-    .sidebar-noti-item strong { color: #4090C3; }
 
     /* ===== 버튼 ===== */
     .stButton > button[kind="primary"] {
@@ -417,31 +397,24 @@ def split_by_vendor(df, vendor_column='공급처'):
     return vendor_data
 
 
-# ===== 사이드바 =====
-with st.sidebar:
-    st.image("assets/logo.png", use_container_width=True)
-    st.markdown("""
-    <div style="padding:0 14px 0 14px;">
-        <div style="font-size:0.78rem;color:#94A3B8;margin-top:-8px;margin-bottom:1rem;">위탁 발주 관리 시스템</div>
-    </div>
-    """, unsafe_allow_html=True)
+# ===== 상단 헤더 + 탭 네비게이션 =====
+_col_logo, _col_spacer = st.columns([1, 3])
+with _col_logo:
+    st.image("assets/logo.png", width=160)
 
-    page = st.radio(
-        "메뉴",
-        ["🏠 홈", "📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드"],
-        label_visibility="collapsed"
-    )
-
-    st.markdown("""
-    <div style="padding:0 14px;margin-top:auto;">
-        <div style="font-size:0.72rem;color:#CBD5E1;margin-top:1.5rem;">v1.0 Demo · 갓샵</div>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown('<div class="nav-tabs">', unsafe_allow_html=True)
+page = st.radio(
+    "메뉴",
+    ["📤 발주 업로드", "📊 송장 현황", "📥 송장 다운로드"],
+    horizontal=True,
+    label_visibility="collapsed"
+)
+st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ===== 홈/송장다운로드 페이지에서 송장 변경 감지 (30초 간격) =====
-# 발주 업로드 페이지에서는 autorefresh 끔 (업로드 중 리셋 방지)
-if page not in ["📊 송장 현황", "📤 발주 업로드"]:
+# ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (30초 간격) =====
+# 발주 업로드 / 송장 현황 페이지에서는 autorefresh 끔
+if page == "📥 송장 다운로드":
     bg_refresh = st_autorefresh(interval=30000, limit=None, key="bg_autorefresh")
 
     # 백그라운드 송장 체크 (캐시 활용, 에러 시 무시)
@@ -476,91 +449,8 @@ if page not in ["📊 송장 현황", "📤 발주 업로드"]:
         pass
 
 
-# ===== 홈 =====
-if page == "🏠 홈":
-    st.markdown('<span class="badge">DASHBOARD</span>', unsafe_allow_html=True)
-    st.markdown('<div class="main-header">발주도우미</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">위탁 판매 발주 & 송장 관리 자동화 시스템</div>', unsafe_allow_html=True)
-
-    _orders = st.session_state.get('total_orders', 0)
-    _inv = st.session_state.get('invoice_count', 0)
-    _pend = st.session_state.get('pending_count', 0)
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f"""
-        <div class="card-blue">
-            <div class="card-icon" style="background:rgba(255,255,255,0.2);color:#fff;">📦</div>
-            <div class="card-title">등록 업체</div>
-            <div class="card-value">5개</div>
-            <div class="card-desc">총 위탁 업체 수</div>
-        </div>""", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"""
-        <div class="card">
-            <div class="card-icon">📤</div>
-            <div class="card-title">오늘 발주</div>
-            <div class="card-value" style="color:#0F172A;">{_orders}건</div>
-            <div class="card-desc">발주 업로드 건수</div>
-        </div>""", unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"""
-        <div class="card">
-            <div class="card-icon">✅</div>
-            <div class="card-title">송장 입력 완료</div>
-            <div class="card-value" style="color:#0F172A;">{_inv}건</div>
-            <div class="card-desc">업체 입력 완료</div>
-        </div>""", unsafe_allow_html=True)
-    with col4:
-        st.markdown(f"""
-        <div class="card">
-            <div class="card-icon">⏳</div>
-            <div class="card-title">미입력</div>
-            <div class="card-value" style="color:#0F172A;">{_pend}건</div>
-            <div class="card-desc">입력 대기 중</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<span class="badge">HOW IT WORKS</span>', unsafe_allow_html=True)
-    st.markdown("#### 사용 방법")
-
-    steps = [
-        ("📤", "발주 업로드", "이지어드민 엑셀 파일을 업로드하면 공급처별로 자동 분류 & 알림 발송"),
-        ("📊", "송장 현황", "각 업체의 송장번호 입력 현황을 실시간 모니터링"),
-        ("📥", "송장 다운로드", "입력된 송장번호를 수집하여 이지어드민용 엑셀 다운로드"),
-    ]
-    for i, (icon, title, desc) in enumerate(steps):
-        active = ""
-        st.markdown(f"""
-        <div class="list-row list-row-static {active}">
-            <div>
-                <div class="list-name">{icon} {title}</div>
-                <div class="list-desc">{desc}</div>
-            </div>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<span class="badge">FLOW</span>', unsafe_allow_html=True)
-    st.markdown("#### 시스템 흐름")
-
-    flow_steps = [
-        "이지어드민 엑셀 업로드",
-        "공급처별 구글 시트 자동 분배",
-        "각 업체에 카카오 알림톡 발송",
-        "업체 사장님이 시트에서 송장번호 입력",
-        "송장 수집 → 엑셀 다운로드 → 이지어드민 업로드",
-    ]
-    for i, step in enumerate(flow_steps):
-        st.markdown(f"""
-        <div class="list-row">
-            <div>
-                <div class="list-name"><span style="color:#4090C3; font-weight:700;">{i+1}.</span> {step}</div>
-            </div>
-        </div>""", unsafe_allow_html=True)
-
-
 # ===== 발주 업로드 =====
-elif page == "📤 발주 업로드":
+if page == "📤 발주 업로드":
     st.markdown('<div class="main-header">📤 발주 업로드</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">이지어드민 엑셀 파일을 업로드하면 자동으로 처리됩니다</div>', unsafe_allow_html=True)
 
@@ -642,7 +532,7 @@ elif page == "📤 발주 업로드":
                 progress.progress(1.0, text="시트 업로드 완료!")
 
                 # 알림톡 발송 (실제 API 호출)
-                alimtalk_config = config.load_alimtalk_config()
+                alimtalk_config = Config().load_alimtalk_config()
                 _alimtalk_logs = []
                 for vendor_info in vendors_info:
                     vendor_name = vendor_info['name']
@@ -1088,26 +978,3 @@ elif page == "📥 송장 다운로드":
                         key=f"dl_{courier}"
                     )
 
-
-
-# ===== 사이드바 실시간 알림 (맨 마지막에 렌더링) =====
-with st.sidebar:
-    st.markdown('<div class="sidebar-section-title">🔔 실시간 알림</div>', unsafe_allow_html=True)
-
-    if 'notification_log' not in st.session_state:
-        st.session_state['notification_log'] = []
-
-    if st.session_state.get('notification_log'):
-        for _log in st.session_state['notification_log'][:5]:
-            st.markdown(
-                f"<div class='sidebar-noti-item'>"
-                f"<strong>{_log['time']}</strong>&nbsp;&nbsp;"
-                f"{_log['vendor']} +{_log['count']}건"
-                f"</div>",
-                unsafe_allow_html=True
-            )
-    else:
-        st.markdown(
-            '<div style="padding:0 14px;font-size:0.78rem;color:#CBD5E1;">아직 새 알림이 없습니다</div>',
-            unsafe_allow_html=True
-        )
