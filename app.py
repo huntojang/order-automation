@@ -273,17 +273,28 @@ st.markdown("""
         border-radius: 12px !important; border: none !important;
     }
 
-    /* ===== Streamlit 기본 뱃지/푸터 숨기기 ===== */
+    /* ===== Streamlit 기본 뱃지/푸터/툴바 완전 숨기기 ===== */
     .viewerBadge_container__r5tak,
     .styles_viewerBadge__CvC9N,
-    footer, .reportview-container .main footer,
-    #MainMenu, [data-testid="stToolbar"],
-    a[href*="streamlit.io"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
     .stDeployButton,
-    [data-testid="stDecoration"] {
+    #MainMenu,
+    footer,
+    footer *,
+    .reportview-container .main footer,
+    a[href*="streamlit.io"],
+    a[href*="github.com"][data-testid],
+    img[src*="avatar"],
+    div[class*="viewerBadge"],
+    div[class*="deployBtn"] {
         display: none !important; visibility: hidden !important;
+        height: 0 !important; min-height: 0 !important;
+        max-height: 0 !important; overflow: hidden !important;
+        opacity: 0 !important; pointer-events: none !important;
     }
-    footer:after { display: none !important; }
+    footer:after { display: none !important; content: "" !important; }
 </style>
 """, unsafe_allow_html=True)
 
