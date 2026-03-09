@@ -114,7 +114,7 @@ st.markdown("""
         border: none !important;
     }
     .card-accent {
-        background: #2D6A4F !important; border-radius: 16px !important; padding: 1.5rem !important;
+        background: #2E643C !important; border-radius: 16px !important; padding: 1.5rem !important;
         color: white !important; border: none !important;
     }
     .card-title { font-size: 0.85rem !important; font-weight: 500 !important; color: #888 !important; margin-bottom: 8px !important; }
@@ -131,14 +131,14 @@ st.markdown("""
         margin-bottom: 8px !important; border: none !important;
     }
     .list-row:hover { background: #EFEFEF !important; }
-    .list-row-active { background: #2D6A4F !important; color: white !important; }
-    .list-row-active:hover { background: #245C43 !important; }
+    .list-row-active { background: #2E643C !important; color: white !important; }
+    .list-row-active:hover { background: #255633 !important; }
     .list-row-active .list-desc { color: rgba(255,255,255,0.6) !important; }
     .list-name { font-weight: 600 !important; font-size: 0.92rem !important; }
     .list-desc { font-size: 0.82rem !important; color: #888 !important; }
     .list-arrow {
         width: 34px !important; height: 34px !important; border-radius: 50% !important;
-        background: #2D6A4F !important; color: white !important; display: flex !important;
+        background: #2E643C !important; color: white !important; display: flex !important;
         align-items: center !important; justify-content: center !important; font-size: 0.9rem !important;
         flex-shrink: 0 !important; text-decoration: none !important;
     }
@@ -153,7 +153,7 @@ st.markdown("""
 
     /* ===== 알림바 ===== */
     .notification-bar {
-        background: #2D6A4F !important; color: white !important;
+        background: #2E643C !important; color: white !important;
         padding: 0.8rem 1.2rem !important; border-radius: 12px !important;
         margin: 0.5rem 0 !important; font-size: 0.88rem !important;
     }
@@ -184,7 +184,7 @@ st.markdown("""
     }
     div[data-testid="stRadio"] > div > label:hover,
     div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
-        color: #2D6A4F !important;
+        color: #2E643C !important;
     }
     div[data-testid="stRadio"] > div > label[data-checked="true"],
     div[data-testid="stRadio"] > div > label:has(input:checked),
@@ -192,7 +192,7 @@ st.markdown("""
     div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
         color: #1A1A1A !important;
         font-weight: 700 !important;
-        border-bottom: 2px solid #2D6A4F !important;
+        border-bottom: 2px solid #2E643C !important;
     }
     /* 라디오 동그라미 숨기기 */
     div[data-testid="stRadio"] > div > label > div:first-child,
@@ -213,15 +213,15 @@ st.markdown("""
     button[kind="primary"],
     .stButton > button[kind="primary"],
     [data-testid="stButton"] > button[kind="primary"] {
-        background-color: #2D6A4F !important; border: none !important;
+        background-color: #2E643C !important; border: none !important;
         border-radius: 12px !important; padding: 0.65rem 1.5rem !important;
         font-weight: 600 !important; font-size: 0.92rem !important;
         color: white !important;
     }
     button[kind="primary"]:hover,
     .stButton > button[kind="primary"]:hover {
-        background-color: #245C43 !important;
-        box-shadow: 0 4px 16px rgba(45,106,79,0.25) !important;
+        background-color: #255633 !important;
+        box-shadow: 0 4px 16px rgba(46,100,60,0.25) !important;
     }
     button, .stButton > button {
         border-radius: 12px !important; font-weight: 500 !important;
@@ -229,7 +229,7 @@ st.markdown("""
 
     /* ===== 프로그레스바 ===== */
     [data-testid="stProgress"] > div > div > div,
-    .stProgress > div > div > div { background-color: #2D6A4F !important; border-radius: 8px !important; }
+    .stProgress > div > div > div { background-color: #2E643C !important; border-radius: 8px !important; }
 
     /* ===== metric 카드 ===== */
     [data-testid="stMetric"],
@@ -257,12 +257,12 @@ st.markdown("""
     /* ===== 다운로드 버튼 ===== */
     .stDownloadButton > button,
     [data-testid="stDownloadButton"] > button {
-        background-color: #2D6A4F !important; color: white !important;
+        background-color: #2E643C !important; color: white !important;
         border: none !important; border-radius: 12px !important; font-weight: 600 !important;
     }
     .stDownloadButton > button:hover,
     [data-testid="stDownloadButton"] > button:hover {
-        background-color: #245C43 !important;
+        background-color: #255633 !important;
     }
 
     /* ===== 구분선 ===== */
@@ -653,7 +653,7 @@ if page == "발주 업로드":
                     sheet_url = v.get('sheet_url', '')
                     sheet_status = "완료" if v.get('sheet_uploaded') else "—"
                     talk_status = "완료" if v.get('alimtalk_sent') else "—"
-                    link_html = f' · <a href="{sheet_url}" target="_blank" style="color:#2D6A4F;">시트</a>' if sheet_url else ""
+                    link_html = f' · <a href="{sheet_url}" target="_blank" style="color:#2E643C;">시트</a>' if sheet_url else ""
                     st.markdown(
                         f"""<div class="list-row" style="margin-bottom:6px;">
                             <div style="flex:1;">
@@ -753,7 +753,7 @@ elif page == "송장 현황":
                     <span style="color:#0F172A;font-weight:600;">{total_invoices}/{total_orders} ({_pct}%)</span>
                 </div>
                 <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
-                    <div style="background:#2D6A4F;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
+                    <div style="background:#2E643C;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
@@ -766,10 +766,10 @@ elif page == "송장 현황":
             is_new = vs['completed'] > prev_count
             is_done = vs['completed'] == vs['total'] and vs['total'] > 0
 
-            new_badge = ' <span style="color:#2D6A4F;font-size:0.75rem;font-weight:600;">NEW</span>' if is_new else ""
+            new_badge = ' <span style="color:#2E643C;font-size:0.75rem;font-weight:600;">NEW</span>' if is_new else ""
 
             if is_done:
-                status_badge = '<span style="background:#E8F5E9;color:#2D6A4F;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">완료</span>'
+                status_badge = '<span style="background:#E8F5E9;color:#2E643C;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">완료</span>'
                 active_cls = "list-row-active"
             elif vs['completed'] > 0:
                 status_badge = f'<span style="background:#FFF8E1;color:#B8860B;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">{vs["completed"]}/{vs["total"]}</span>'
