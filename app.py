@@ -272,6 +272,18 @@ st.markdown("""
     [data-testid="stAlert"] {
         border-radius: 12px !important; border: none !important;
     }
+
+    /* ===== Streamlit 기본 뱃지/푸터 숨기기 ===== */
+    .viewerBadge_container__r5tak,
+    .styles_viewerBadge__CvC9N,
+    footer, .reportview-container .main footer,
+    #MainMenu, [data-testid="stToolbar"],
+    a[href*="streamlit.io"],
+    .stDeployButton,
+    [data-testid="stDecoration"] {
+        display: none !important; visibility: hidden !important;
+    }
+    footer:after { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
