@@ -85,187 +85,193 @@ st.markdown("""
 <style>
     /* ===== 글로벌 ===== */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    .block-container { max-width: 1100px; padding-top: 1.5rem !important; }
-    [data-testid="stAppViewBlockContainer"] { padding-top: 1.5rem !important; }
+    html, body, [class*="css"], [class*="st-"] { font-family: 'Inter', sans-serif !important; }
+    .block-container, [data-testid="stAppViewBlockContainer"] {
+        max-width: 1100px !important; padding-top: 1.5rem !important;
+    }
     iframe[title="streamlit_autorefresh.st_autorefresh"] {
-        position: absolute; height: 0 !important; overflow: hidden;
+        position: absolute !important; height: 0 !important; overflow: hidden !important;
     }
-
-    /* 로딩 스피너 */
-    .stSpinner > div > div {
-        border: 3px solid #E8E8E8 !important;
-        border-top: 3px solid #2D6A4F !important;
-        border-radius: 50% !important;
-        width: 22px !important; height: 22px !important;
-        animation: spin 0.7s linear infinite !important;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Streamlit 기본 헤더/푸터 숨기기 */
+    header[data-testid="stHeader"] { background: transparent !important; }
 
     /* ===== 헤더 ===== */
     .main-header {
-        font-size: 1.5rem; font-weight: 700; color: #1A1A1A;
-        margin-bottom: 1.25rem; letter-spacing: -0.03em;
+        font-size: 1.5rem !important; font-weight: 700 !important; color: #1A1A1A !important;
+        margin-bottom: 1.25rem !important; letter-spacing: -0.03em !important;
+        line-height: 1.3 !important;
     }
-    .sub-header { display: none; }
+    .sub-header { display: none !important; }
     .section-title {
-        font-size: 0.8rem; font-weight: 600; color: #999;
-        text-transform: uppercase; letter-spacing: 0.06em;
-        margin-bottom: 0.75rem;
+        font-size: 0.78rem !important; font-weight: 600 !important; color: #999 !important;
+        text-transform: uppercase !important; letter-spacing: 0.08em !important;
+        margin-bottom: 0.75rem !important; margin-top: 0.5rem !important;
     }
 
     /* ===== 카드 ===== */
     .card {
-        background: #F5F5F5; border-radius: 16px; padding: 1.5rem;
-        border: none; transition: all 0.2s ease;
+        background: #F5F5F5 !important; border-radius: 16px !important; padding: 1.5rem !important;
+        border: none !important;
     }
-    .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
     .card-accent {
-        background: #2D6A4F; border-radius: 16px; padding: 1.5rem;
-        color: white; border: none;
+        background: #2D6A4F !important; border-radius: 16px !important; padding: 1.5rem !important;
+        color: white !important; border: none !important;
     }
-    .card-title { font-size: 0.85rem; font-weight: 500; color: #888; margin-bottom: 8px; }
-    .card-value { font-size: 2rem; font-weight: 700; color: #1A1A1A; margin-bottom: 2px; }
-    .card-desc { font-size: 0.8rem; color: #AAA; }
-    .card-accent .card-title { color: rgba(255,255,255,0.7); }
-    .card-accent .card-value { color: #fff; }
-    .card-accent .card-desc { color: rgba(255,255,255,0.5); }
+    .card-title { font-size: 0.85rem !important; font-weight: 500 !important; color: #888 !important; margin-bottom: 8px !important; }
+    .card-value { font-size: 2rem !important; font-weight: 700 !important; color: #1A1A1A !important; }
+    .card-desc { font-size: 0.8rem !important; color: #AAA !important; }
+    .card-accent .card-title { color: rgba(255,255,255,0.7) !important; }
+    .card-accent .card-value { color: #fff !important; }
+    .card-accent .card-desc { color: rgba(255,255,255,0.5) !important; }
 
     /* ===== 리스트 행 ===== */
     .list-row {
-        display: flex; align-items: center; justify-content: space-between;
-        background: #F5F5F5; border-radius: 14px; padding: 1rem 1.25rem;
-        margin-bottom: 8px; border: none;
-        transition: all 0.2s ease;
+        display: flex !important; align-items: center !important; justify-content: space-between !important;
+        background: #F5F5F5 !important; border-radius: 14px !important; padding: 1rem 1.25rem !important;
+        margin-bottom: 8px !important; border: none !important;
     }
-    .list-row:hover { background: #EFEFEF; }
-    .list-row-active {
-        background: #2D6A4F;
-        color: white; border-color: transparent;
-    }
-    .list-row-active:hover { background: #245C43; }
-    .list-row-active .list-desc { color: rgba(255,255,255,0.6); }
-    .list-name { font-weight: 600; font-size: 0.92rem; }
-    .list-desc { font-size: 0.82rem; color: #888; }
+    .list-row:hover { background: #EFEFEF !important; }
+    .list-row-active { background: #2D6A4F !important; color: white !important; }
+    .list-row-active:hover { background: #245C43 !important; }
+    .list-row-active .list-desc { color: rgba(255,255,255,0.6) !important; }
+    .list-name { font-weight: 600 !important; font-size: 0.92rem !important; }
+    .list-desc { font-size: 0.82rem !important; color: #888 !important; }
     .list-arrow {
-        width: 34px; height: 34px; border-radius: 50%;
-        background: #2D6A4F; color: white; display: flex;
-        align-items: center; justify-content: center; font-size: 0.9rem;
-        flex-shrink: 0;
+        width: 34px !important; height: 34px !important; border-radius: 50% !important;
+        background: #2D6A4F !important; color: white !important; display: flex !important;
+        align-items: center !important; justify-content: center !important; font-size: 0.9rem !important;
+        flex-shrink: 0 !important; text-decoration: none !important;
     }
-    .list-row-active .list-arrow { background: rgba(255,255,255,0.2); }
+    .list-row-active .list-arrow { background: rgba(255,255,255,0.2) !important; }
 
     /* ===== 카카오 메시지 ===== */
     .kakao-msg {
-        background: #FEE500; color: #3C1E1E; padding: 1.25rem;
-        border-radius: 16px; margin: 0.5rem 0; font-size: 0.88rem;
-        max-width: 340px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        background: #FEE500 !important; color: #3C1E1E !important; padding: 1.25rem !important;
+        border-radius: 16px !important; margin: 0.5rem 0 !important; font-size: 0.88rem !important;
+        max-width: 340px !important;
     }
 
     /* ===== 알림바 ===== */
     .notification-bar {
-        background: #2D6A4F;
-        color: white; padding: 0.8rem 1.2rem; border-radius: 12px;
-        margin: 0.5rem 0; font-size: 0.88rem;
-        animation: fadeIn 0.4s ease-out;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
+        background: #2D6A4F !important; color: white !important;
+        padding: 0.8rem 1.2rem !important; border-radius: 12px !important;
+        margin: 0.5rem 0 !important; font-size: 0.88rem !important;
     }
 
     /* ===== 사이드바 숨기기 ===== */
-    [data-testid="stSidebar"] { display: none !important; }
-    button[data-testid="stSidebarCollapsedControl"] { display: none !important; }
+    [data-testid="stSidebar"],
+    section[data-testid="stSidebar"],
+    button[data-testid="stSidebarCollapsedControl"],
+    button[kind="headerNoPadding"] { display: none !important; }
 
     /* ===== 상단 네비게이션 탭 ===== */
-    .nav-tabs {
-        display: flex; gap: 0; margin-bottom: 1.5rem;
-        border-bottom: 1px solid #E8E8E8;
+    /* 라디오 버튼을 탭처럼 보이게 */
+    div[data-testid="stRadio"] > div {
+        flex-direction: row !important; gap: 0 !important;
     }
-    .nav-tabs .stRadio > div {
-        gap: 0 !important; flex-direction: row !important;
-    }
-    .nav-tabs .stRadio > div[role="radiogroup"] > label {
-        background: transparent;
-        border: none;
-        border-bottom: 2px solid transparent;
-        border-radius: 0;
-        padding: 12px 28px !important;
+    div[data-testid="stRadio"] > div > label,
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        border-radius: 0 !important;
+        padding: 10px 24px !important;
         margin: 0 !important;
-        font-weight: 500;
-        font-size: 0.9rem;
-        color: #999;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        font-weight: 500 !important;
+        font-size: 0.9rem !important;
+        color: #999 !important;
+        cursor: pointer !important;
     }
-    .nav-tabs .stRadio > div[role="radiogroup"] > label:hover {
-        color: #2D6A4F;
+    div[data-testid="stRadio"] > div > label:hover,
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+        color: #2D6A4F !important;
     }
-    .nav-tabs .stRadio > div[role="radiogroup"] > label[data-checked="true"],
-    .nav-tabs .stRadio > div[role="radiogroup"] > label:has(input:checked) {
+    div[data-testid="stRadio"] > div > label[data-checked="true"],
+    div[data-testid="stRadio"] > div > label:has(input:checked),
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label[data-checked="true"],
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
         color: #1A1A1A !important;
-        font-weight: 700;
-        border-bottom: 2px solid #2D6A4F;
+        font-weight: 700 !important;
+        border-bottom: 2px solid #2D6A4F !important;
     }
-    .nav-tabs .stRadio > div[role="radiogroup"] > label > div:first-child {
+    /* 라디오 동그라미 숨기기 */
+    div[data-testid="stRadio"] > div > label > div:first-child,
+    div[data-testid="stRadio"] > div[role="radiogroup"] > label > div:first-child,
+    div[data-testid="stRadio"] [data-testid="stMarkdownContainer"]:empty {
         display: none !important;
     }
+    /* 라디오 컨테이너 하단 보더 */
+    div[data-testid="stRadio"] {
+        border-bottom: 1px solid #E8E8E8 !important;
+        margin-bottom: 1.5rem !important;
+        padding-bottom: 0 !important;
+    }
+    /* 라디오 레이블 숨기기 */
+    div[data-testid="stRadio"] > label { display: none !important; }
 
     /* ===== 버튼 ===== */
-    .stButton > button[kind="primary"] {
-        background-color: #2D6A4F; border: none;
-        border-radius: 12px; padding: 0.65rem 1.5rem;
-        font-weight: 600; font-size: 0.92rem;
-        transition: all 0.2s ease;
+    button[kind="primary"],
+    .stButton > button[kind="primary"],
+    [data-testid="stButton"] > button[kind="primary"] {
+        background-color: #2D6A4F !important; border: none !important;
+        border-radius: 12px !important; padding: 0.65rem 1.5rem !important;
+        font-weight: 600 !important; font-size: 0.92rem !important;
+        color: white !important;
     }
+    button[kind="primary"]:hover,
     .stButton > button[kind="primary"]:hover {
-        background-color: #245C43; box-shadow: 0 4px 16px rgba(45,106,79,0.25);
+        background-color: #245C43 !important;
+        box-shadow: 0 4px 16px rgba(45,106,79,0.25) !important;
     }
-    .stButton > button {
-        border-radius: 12px; font-weight: 500;
+    button, .stButton > button {
+        border-radius: 12px !important; font-weight: 500 !important;
     }
 
     /* ===== 프로그레스바 ===== */
-    .stProgress > div > div > div { background-color: #2D6A4F; border-radius: 8px; }
-    .stProgress > div > div { background-color: #E8E8E8; border-radius: 8px; }
+    [data-testid="stProgress"] > div > div > div,
+    .stProgress > div > div > div { background-color: #2D6A4F !important; border-radius: 8px !important; }
 
     /* ===== metric 카드 ===== */
-    [data-testid="stMetric"] {
-        background: #F5F5F5; border: none;
-        border-radius: 16px; padding: 1.2rem;
+    [data-testid="stMetric"],
+    [data-testid="stMetricValue"],
+    div[data-testid="stMetric"] {
+        background: #F5F5F5 !important; border: none !important;
+        border-radius: 16px !important;
     }
-    [data-testid="stMetricValue"] { color: #1A1A1A; font-weight: 700; }
-    [data-testid="stMetricLabel"] { color: #888; font-weight: 500; }
-    [data-testid="stMetricDelta"] svg { display: none; }
+    [data-testid="stMetricValue"] > div { color: #1A1A1A !important; font-weight: 700 !important; }
+    [data-testid="stMetricLabel"] > div { color: #888 !important; font-weight: 500 !important; }
+    [data-testid="stMetricDelta"] svg { display: none !important; }
 
     /* ===== 파일 업로더 ===== */
-    [data-testid="stFileUploader"] { border-radius: 16px; }
-    [data-testid="stFileUploader"] > div > div {
-        border-radius: 16px; border: 2px dashed #D5D5D5;
-        background: #FAFAFA;
+    [data-testid="stFileUploader"] section {
+        border-radius: 16px !important; border: 2px dashed #D5D5D5 !important;
+        background: #FAFAFA !important; padding: 2rem !important;
     }
 
     /* ===== expander ===== */
-    .streamlit-expanderHeader {
-        background: #F5F5F5; border-radius: 12px;
-        font-weight: 500;
+    [data-testid="stExpander"] summary {
+        background: #F5F5F5 !important; border-radius: 12px !important;
+        font-weight: 500 !important; padding: 0.8rem 1rem !important;
     }
 
     /* ===== 다운로드 버튼 ===== */
-    .stDownloadButton > button {
-        background-color: #2D6A4F; color: white; border: none;
-        border-radius: 12px; font-weight: 600;
+    .stDownloadButton > button,
+    [data-testid="stDownloadButton"] > button {
+        background-color: #2D6A4F !important; color: white !important;
+        border: none !important; border-radius: 12px !important; font-weight: 600 !important;
     }
-    .stDownloadButton > button:hover {
-        background-color: #245C43;
+    .stDownloadButton > button:hover,
+    [data-testid="stDownloadButton"] > button:hover {
+        background-color: #245C43 !important;
     }
 
     /* ===== 구분선 ===== */
     hr { border-color: #EBEBEB !important; }
+
+    /* ===== 알림 메시지 스타일 ===== */
+    [data-testid="stAlert"] {
+        border-radius: 12px !important; border: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
