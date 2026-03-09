@@ -1,0 +1,16 @@
+name: Keep Streamlit Alive
+
+on:
+  schedule:
+    # 매 6시간마다 ping (한국시간 기준 00, 06, 12, 18시)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # 수동 실행도 가능
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" https://balju-doumi.streamlit.app
+          echo " - Pinged at $(date)"

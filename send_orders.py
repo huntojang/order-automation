@@ -180,18 +180,28 @@ def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
             sheet_url=vendor_info['google_sheet_url']
         )
 
-        # API 엔드포인트 (알리고 예시)
+        # API 엔드포인트 (알리고)
         if config['service'] == 'aligo':
+            import json as _json
             api_url = 'https://kakaoapi.aligo.in/akv10/alimtalk/send/'
+            button_info = _json.dumps({
+                "button": [{
+                    "type": "WL",
+                    "name": "발주서 확인하기",
+                    "url_mobile": vendor_info['google_sheet_url'],
+                    "url_pc": vendor_info['google_sheet_url']
+                }]
+            })
             payload = {
                 'apikey': config['api_key'],
                 'userid': config['user_id'],
-                'senderkey': config['sender'],
+                'senderkey': config['sender_key'],
                 'tpl_code': config['template_code'],
                 'sender': config['sender'],
                 'receiver_1': vendor_info['phone'],
-                'subject_1': '[갓샵] 발주 알림',
+                'subject_1': '발주 알림',
                 'message_1': message,
+                'button_1': button_info,
             }
         else:
             logging.error(f'❌ 지원하지 않는 서비스: {config["service"]}')

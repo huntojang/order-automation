@@ -13,6 +13,7 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger
+from send_orders import send_alimtalk
 
 # 페이지 설정 (파비콘을 커스텀 이미지로)
 from PIL import Image
@@ -640,7 +641,8 @@ elif page == "📤 발주 업로드":
 
                 progress.progress(1.0, text="시트 업로드 완료!")
 
-                # 알림톡 시뮬레이션 (session_state에 저장)
+                # 알림톡 발송 (실제 API 호출)
+                alimtalk_config = config.load_alimtalk_config()
                 _alimtalk_logs = []
                 for vendor_info in vendors_info:
                     vendor_name = vendor_info['name']
@@ -648,11 +650,15 @@ elif page == "📤 발주 업로드":
                         continue
                     order_count = len(vendor_data[vendor_name])
                     sheet_url = vendor_info.get('google_sheet_url', '')
+                    sent = False
+                    if alimtalk_config:
+                        sent = send_alimtalk(vendor_info, order_count, alimtalk_config)
                     _alimtalk_logs.append({
                         'name': vendor_name,
                         'phone': vendor_info.get('phone', ''),
                         'count': order_count,
                         'sheet_url': sheet_url,
+                        'sent': sent,
                     })
                     time.sleep(0.3)
 
@@ -672,17 +678,15 @@ elif page == "📤 발주 업로드":
                     'total_orders': len(merged_df),
                     'vendors': []
                 }
-                for vendor_info in vendors_info:
-                    vn = vendor_info['name']
-                    if vn in vendor_data:
-                        log_entry['vendors'].append({
-                            'name': vn,
-                            'phone': vendor_info.get('phone', ''),
-                            'orders': len(vendor_data[vn]),
-                            'sheet_uploaded': True,
-                            'alimtalk_sent': True,
-                            'sheet_url': vendor_info.get('google_sheet_url', '')
-                        })
+                for _al in _alimtalk_logs:
+                    log_entry['vendors'].append({
+                        'name': _al['name'],
+                        'phone': _al['phone'],
+                        'orders': _al['count'],
+                        'sheet_uploaded': True,
+                        'alimtalk_sent': _al.get('sent', False),
+                        'sheet_url': _al['sheet_url']
+                    })
                 save_upload_log(log_entry)
 
                 # 성공 이펙트 (커스텀 로고 애니메이션)
@@ -703,7 +707,11 @@ elif page == "📤 발주 업로드":
                     }}
                 </style>
                 """, unsafe_allow_html=True)
-                st.success(f"발주 처리 완료! {success_count}개 업체에 총 {len(merged_df)}건 시트 업로드 + 카카오 알림톡 발송 완료")
+                alimtalk_sent_count = sum(1 for _al in _alimtalk_logs if _al.get('sent'))
+                if alimtalk_sent_count > 0:
+                    st.success(f"발주 처리 완료! {success_count}개 업체 시트 업로드 + {alimtalk_sent_count}개 업체 알림톡 발송 완료")
+                else:
+                    st.success(f"발주 처리 완료! {success_count}개 업체에 총 {len(merged_df)}건 시트 업로드 완료 (알림톡 미설정)")
 
         # 알림톡 발송 내역
         if st.session_state.get('alimtalk_logs'):
@@ -711,11 +719,14 @@ elif page == "📤 발주 업로드":
             st.markdown("### 📱 카카오 알림톡 발송 현황")
             _date = st.session_state.get('alimtalk_date', '')
             for _al in st.session_state['alimtalk_logs']:
+                _sent = _al.get('sent', False)
+                _icon = "✅" if _sent else "⚠️"
+                _status = "발송 완료" if _sent else "미발송 (설정 필요)"
                 st.markdown(f"""
                 <div class="list-row list-row-active">
                     <div style="flex:1;">
-                        <div class="list-name">✅ {_al['name']}</div>
-                        <div class="list-desc" style="color:rgba(255,255,255,0.7);">{_al['phone']} · {_al['count']}건 발주 알림톡 발송 완료</div>
+                        <div class="list-name">{_icon} {_al['name']}</div>
+                        <div class="list-desc" style="color:rgba(255,255,255,0.7);">{_al['phone']} · {_al['count']}건 발주 알림톡 {_status}</div>
                     </div>
                     <a href="{_al['sheet_url']}" target="_blank" style="text-decoration:none;">
                         <div class="list-arrow">→</div>
@@ -725,11 +736,11 @@ elif page == "📤 발주 업로드":
                 for _al in st.session_state['alimtalk_logs']:
                     st.markdown(f"""
                     <div class="kakao-msg">
-                        <strong>[갓샵] 발주 알림</strong><br><br>
                         안녕하세요, {_al['name']} 사장님.<br>
                         {_date} 신규 주문 <strong>{_al['count']}건</strong>이 등록되었습니다.<br><br>
                         아래 링크에서 주문 내역 확인 후,<br>
-                        '송장번호' 칸에 입력 부탁드립니다.<br><br>
+                        '송장번호, 택배사' 칸에 입력 부탁드립니다.<br><br>
+                        ※ 발송 완료 후 별도 연락은 필요 없습니다.<br><br>
                         ▶ <a href="{_al['sheet_url']}" target="_blank">발주서 확인하기</a>
                     </div>
                     """, unsafe_allow_html=True)
