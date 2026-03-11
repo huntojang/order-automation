@@ -994,7 +994,7 @@ elif page == "송장 다운로드":
 # ===== [임시] 서버 IP 확인 =====
 try:
     _my_ip = _req.get('https://api.ipify.org', timeout=5).text
-    st.sidebar.caption(f"서버 IP: {_my_ip}")
+    st.info(f"서버 IP: {_my_ip}")
 except:
-    pass
+    st.warning("IP 확인 실패")
 
