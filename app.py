@@ -8,6 +8,7 @@ import base64
 from datetime import datetime
 from io import BytesIO
 
+import requests as _req
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -989,4 +990,11 @@ elif page == "송장 다운로드":
                         use_container_width=True,
                         key=f"dl_{courier}"
                     )
+
+# ===== [임시] 서버 IP 확인 =====
+try:
+    _my_ip = _req.get('https://api.ipify.org', timeout=5).text
+    st.sidebar.caption(f"서버 IP: {_my_ip}")
+except:
+    pass
 
