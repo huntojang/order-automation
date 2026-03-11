@@ -551,6 +551,7 @@ if page == "발주 업로드":
 
                 # 알림톡 발송 (실제 API 호출)
                 alimtalk_config = Config().load_alimtalk_config()
+                logging.info(f"[DEBUG] alimtalk_config: {bool(alimtalk_config)} / keys: {list(alimtalk_config.keys()) if alimtalk_config else 'None'}")
                 _alimtalk_logs = []
                 for vendor_info in vendors_info:
                     vendor_name = vendor_info['name']
@@ -560,7 +561,11 @@ if page == "발주 업로드":
                     sheet_url = vendor_info.get('google_sheet_url', '')
                     sent = False
                     if alimtalk_config:
+                        logging.info(f"[DEBUG] Sending alimtalk to {vendor_name} ({vendor_info.get('phone', '')})")
                         sent = send_alimtalk(vendor_info, order_count, alimtalk_config)
+                        logging.info(f"[DEBUG] Result: {sent}")
+                    else:
+                        logging.warning("[DEBUG] alimtalk_config is empty!")
                     _alimtalk_logs.append({
                         'name': vendor_name,
                         'phone': vendor_info.get('phone', ''),
