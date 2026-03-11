@@ -28,7 +28,14 @@ class Config:
             pass
 
     def load_vendors(self) -> List[Dict[str, Any]]:
-        """업체 정보 로드 (파일 우선, 없으면 Secrets)"""
+        """업체 정보 로드 (Secrets 우선, 없으면 파일)"""
+        if self._secrets and "vendors" in self._secrets:
+            vendors_section = self._secrets["vendors"]
+            vendors_str = vendors_section.get("vendors", "[]") if hasattr(vendors_section, 'get') else str(vendors_section)
+            if isinstance(vendors_str, str):
+                parsed = json.loads(vendors_str)
+                return [dict(v) for v in parsed]
+
         vendors_file = os.path.join(self.config_dir, 'vendors.json')
         try:
             with open(vendors_file, 'r', encoding='utf-8') as f:
@@ -36,13 +43,6 @@ class Config:
                 return data.get('vendors', [])
         except (FileNotFoundError, json.JSONDecodeError):
             pass
-
-        if self._secrets and "vendors" in self._secrets:
-            vendors_section = self._secrets["vendors"]
-            vendors_str = vendors_section.get("vendors", "[]") if hasattr(vendors_section, 'get') else str(vendors_section)
-            if isinstance(vendors_str, str):
-                parsed = json.loads(vendors_str)
-                return [dict(v) for v in parsed]
 
         logging.error(f'업체 정보를 찾을 수 없습니다')
         return []
