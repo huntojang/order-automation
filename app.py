@@ -237,6 +237,9 @@ st.markdown("""
     div[data-testid="stMetric"] {
         background: #F5F5F5 !important; border: none !important;
         border-radius: 16px !important;
+        display: flex !important; flex-direction: column !important;
+        justify-content: center !important; align-items: center !important;
+        text-align: center !important; min-height: 100px !important;
     }
     [data-testid="stMetricValue"] > div { color: #1A1A1A !important; font-weight: 700 !important; }
     [data-testid="stMetricLabel"] > div { color: #888 !important; font-weight: 500 !important; }
