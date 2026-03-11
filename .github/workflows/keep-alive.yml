@@ -2,15 +2,49 @@ name: Keep Streamlit Alive
 
 on:
   schedule:
-    # 매 6시간마다 ping (한국시간 기준 00, 06, 12, 18시)
-    - cron: '0 */6 * * *'
+    # 매 4시간마다 ping (더 자주 깨우기)
+    - cron: '0 */4 * * *'
   workflow_dispatch: # 수동 실행도 가능
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit App
+      - name: Install puppeteer
+        run: npm install puppeteer
+
+      - name: Wake up Streamlit App
         run: |
-          curl -s -o /dev/null -w "%{http_code}" https://balju-doumi.streamlit.app
-          echo " - Pinged at $(date)"
+          node -e "
+          const puppeteer = require('puppeteer');
+          (async () => {
+            const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+            const page = await browser.newPage();
+
+            console.log('Navigating to app...');
+            await page.goto('https://balju-doumi.streamlit.app', { waitUntil: 'networkidle2', timeout: 60000 });
+
+            // sleep 페이지면 깨우기 버튼 클릭
+            try {
+              const btn = await page.waitForSelector('button', { timeout: 10000 });
+              if (btn) {
+                const text = await page.evaluate(el => el.textContent, btn);
+                if (text.includes('Yes') || text.includes('get this app back up')) {
+                  console.log('App is sleeping. Clicking wake button...');
+                  await btn.click();
+                  await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {});
+                  console.log('Wake button clicked. Waiting for app to load...');
+                  await new Promise(r => setTimeout(r, 30000));
+                }
+              }
+            } catch (e) {
+              console.log('App is already awake or no button found.');
+            }
+
+            const title = await page.title();
+            console.log('Page title:', title);
+            console.log('Pinged at', new Date().toISOString());
+
+            await browser.close();
+          })();
+          "
