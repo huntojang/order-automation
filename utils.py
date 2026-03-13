@@ -554,7 +554,27 @@ class VendorManager:
         return self.update_vendor(vendor_id, **{'상태': '활성'})
 
     def _create_vendor_sheet(self, vendor_name: str) -> str:
-        """업체 전용 발주서 시트 생성"""
+        """업체 전용 발주서 시트 생성 (Apps Script 우선, 실패 시 서비스 계정)"""
+        import requests as _req
+
+        # 1) Apps Script 웹앱으로 생성 시도 (사용자 계정 드라이브 사용)
+        apps_script_url = self._get_apps_script_url()
+        if apps_script_url:
+            try:
+                resp = _req.post(apps_script_url,
+                    json={'vendor_name': vendor_name}, timeout=30,
+                    headers={'Content-Type': 'application/json'})
+                if resp.status_code == 200:
+                    result = resp.json()
+                    if result.get('success') and result.get('sheet_url'):
+                        logging.info(f'✅ {vendor_name} 전용 시트 생성 (Apps Script): {result["sheet_url"]}')
+                        return result['sheet_url']
+                    else:
+                        logging.warning(f'⚠️ Apps Script 응답 오류: {result}')
+            except Exception as e:
+                logging.warning(f'⚠️ Apps Script 호출 실패: {e}')
+
+        # 2) 서비스 계정으로 직접 생성 시도 (fallback)
         try:
             title = f'[발주도우미] {vendor_name}_발주서'
             spreadsheet = self.client.create_spreadsheet(title, folder_id=self.folder_id)
@@ -565,7 +585,6 @@ class VendorManager:
                 'textFormat': {'bold': True},
                 'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
             })
-            # 송장번호/택배사 칸 노란 강조
             worksheet.format('I2:J100', {
                 'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
             })
@@ -575,3 +594,13 @@ class VendorManager:
         except Exception as e:
             logging.error(f'❌ 시트 생성 실패: {e}')
             return ''
+
+    def _get_apps_script_url(self) -> str:
+        """Apps Script 웹앱 URL 가져오기"""
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and "vendor_master" in st.secrets:
+                return st.secrets["vendor_master"].get("apps_script_url", "")
+        except Exception:
+            pass
+        return os.environ.get('APPS_SCRIPT_URL', '')
