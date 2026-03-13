@@ -183,7 +183,7 @@ def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
         # API 엔드포인트 (알리고)
         if config['service'] == 'aligo':
             import json as _json
-            api_url = 'https://kakaoapi.aligo.in/akv10/alimtalk/send/'
+            api_url = config.get('proxy_url', 'https://kakaoapi.aligo.in/akv10/alimtalk/send/')
             button_info = _json.dumps({
                 "button": [{
                     "type": "WL",
