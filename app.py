@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger
+from utils import Config, GoogleSheetClient, GoogleSheetOAuthClient, Logger, VendorManager
 from send_orders import send_alimtalk
 
 # 페이지 설정 (파비콘을 커스텀 이미지로)
@@ -340,8 +340,19 @@ def get_sheet_client():
 
 @st.cache_data(ttl=300)
 def load_vendors():
-    """업체 정보 로드 (5분 캐시)"""
+    """업체 정보 로드 (마스터 시트 우선, 5분 캐시)"""
     config = Config()
+    master_url = config.get_vendor_master_url()
+    if master_url:
+        client = get_sheet_client()
+        if client:
+            try:
+                vm = VendorManager(client, master_url, config.get_shared_folder_id())
+                vendors = vm.load_vendors()
+                if vendors:
+                    return vendors
+            except Exception:
+                pass
     return config.load_vendors()
 
 
@@ -424,7 +435,7 @@ with _col_logo:
 st.markdown('<div class="nav-tabs">', unsafe_allow_html=True)
 page = st.radio(
     "메뉴",
-    ["발주 업로드", "송장 현황", "송장 다운로드"],
+    ["발주 업로드", "송장 현황", "송장 다운로드", "업체 관리"],
     horizontal=True,
     label_visibility="collapsed"
 )
@@ -992,4 +1003,147 @@ elif page == "송장 다운로드":
                         use_container_width=True,
                         key=f"dl_{courier}"
                     )
+
+
+# ===== 업체 관리 페이지 =====
+elif page == "업체 관리":
+    st.markdown('<div class="main-header">업체 관리</div>', unsafe_allow_html=True)
+
+    config = Config()
+    master_url = config.get_vendor_master_url()
+    sheet_client = get_sheet_client()
+
+    if not master_url:
+        st.warning("업체 마스터 시트가 설정되지 않았습니다. Streamlit Secrets에 [vendor_master] 섹션을 추가해주세요.")
+    elif not sheet_client:
+        st.error("구글 시트 연결에 실패했습니다.")
+    else:
+        vm = VendorManager(sheet_client, master_url, config.get_shared_folder_id())
+
+        # --- 새 업체 등록 ---
+        st.markdown('<div class="section-title">새 업체 등록</div>', unsafe_allow_html=True)
+        with st.form("add_vendor_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_name = st.text_input("업체명 *")
+                new_contact = st.text_input("담당자")
+            with col2:
+                new_phone = st.text_input("전화번호 * (알림톡 수신)")
+                new_email = st.text_input("이메일 (선택)")
+            new_sheet_url = st.text_input("구글 시트 URL (비워두면 자동 생성)")
+            submitted = st.form_submit_button("업체 등록", type="primary", use_container_width=True)
+            if submitted:
+                if not new_name or not new_phone:
+                    st.error("업체명과 전화번호는 필수입니다.")
+                else:
+                    with st.spinner(f"{new_name} 등록 중..."):
+                        result = vm.add_vendor(
+                            new_name, new_contact or '', new_phone,
+                            new_email or '', sheet_url=new_sheet_url or None
+                        )
+                    if result:
+                        if result.get('google_sheet_url'):
+                            st.success(f"{new_name} 등록 완료!")
+                        else:
+                            st.warning(f"{new_name} 등록 완료! (시트 자동 생성 실패 — 수정에서 URL을 직접 입력해주세요)")
+                        st.cache_data.clear()
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("업체 등록에 실패했습니다.")
+
+        st.markdown("---")
+
+        # --- 등록된 업체 목록 ---
+        st.markdown('<div class="section-title">등록된 업체</div>', unsafe_allow_html=True)
+        all_vendors = vm.load_all_vendors()
+
+        if not all_vendors:
+            st.info("등록된 업체가 없습니다. 위에서 새 업체를 등록해주세요.")
+        else:
+            active = [v for v in all_vendors if v.get('상태') != '비활성']
+            inactive = [v for v in all_vendors if v.get('상태') == '비활성']
+
+            st.caption(f"총 {len(active)}개 업체 활성 / {len(inactive)}개 비활성")
+
+            for v in active:
+                vid = v.get('업체ID', '')
+                vname = v.get('업체명', '')
+                vphone = v.get('전화번호', '')
+                vcontact = v.get('담당자', '')
+                vemail = v.get('이메일', '')
+                vurl = v.get('구글시트URL', '')
+                vdate = v.get('등록일', '')
+
+                edit_key = f"editing_{vid}"
+                is_editing = st.session_state.get(edit_key, False)
+
+                if is_editing:
+                    with st.form(f"edit_form_{vid}"):
+                        st.markdown(f"**{vname}** 수정")
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            ed_name = st.text_input("업체명", value=vname, key=f"ed_name_{vid}")
+                            ed_contact = st.text_input("담당자", value=vcontact, key=f"ed_contact_{vid}")
+                        with ec2:
+                            ed_phone = st.text_input("전화번호", value=vphone, key=f"ed_phone_{vid}")
+                            ed_email = st.text_input("이메일", value=vemail, key=f"ed_email_{vid}")
+                        bc1, bc2 = st.columns(2)
+                        with bc1:
+                            save_btn = st.form_submit_button("저장", type="primary", use_container_width=True)
+                        with bc2:
+                            cancel_btn = st.form_submit_button("취소", use_container_width=True)
+                        if save_btn:
+                            vm.update_vendor(vid, **{
+                                '업체명': ed_name, '담당자': ed_contact,
+                                '전화번호': ed_phone, '이메일': ed_email
+                            })
+                            st.session_state[edit_key] = False
+                            st.cache_data.clear()
+                            st.rerun()
+                        if cancel_btn:
+                            st.session_state[edit_key] = False
+                            st.rerun()
+                else:
+                    col_info, col_edit, col_del = st.columns([6, 1, 1])
+                    with col_info:
+                        sheet_link = f' · <a href="{vurl}" target="_blank" style="color:#2E643C;">시트 열기</a>' if vurl else ''
+                        st.markdown(f"""
+                        <div class="list-row">
+                            <div style="flex:1;">
+                                <div class="list-name">{vname}</div>
+                                <div class="list-desc">{vphone} · {vcontact}{sheet_link}</div>
+                            </div>
+                        </div>""", unsafe_allow_html=True)
+                    with col_edit:
+                        if st.button("수정", key=f"btn_edit_{vid}", use_container_width=True):
+                            st.session_state[edit_key] = True
+                            st.rerun()
+                    with col_del:
+                        if st.button("삭제", key=f"btn_del_{vid}", use_container_width=True):
+                            vm.delete_vendor(vid)
+                            st.cache_data.clear()
+                            st.rerun()
+
+            # 비활성 업체
+            if inactive:
+                with st.expander(f"비활성 업체 ({len(inactive)}개)"):
+                    for v in inactive:
+                        vid = v.get('업체ID', '')
+                        vname = v.get('업체명', '')
+                        vphone = v.get('전화번호', '')
+                        col_info, col_restore = st.columns([6, 1])
+                        with col_info:
+                            st.markdown(f"""
+                            <div class="list-row" style="opacity:0.5;">
+                                <div style="flex:1;">
+                                    <div class="list-name">{vname}</div>
+                                    <div class="list-desc">{vphone} · 비활성</div>
+                                </div>
+                            </div>""", unsafe_allow_html=True)
+                        with col_restore:
+                            if st.button("복원", key=f"btn_restore_{vid}", use_container_width=True):
+                                vm.restore_vendor(vid)
+                                st.cache_data.clear()
+                                st.rerun()
 

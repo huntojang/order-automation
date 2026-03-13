@@ -79,6 +79,18 @@ class Config:
             return dict(cred_raw)
         return None
 
+    def get_vendor_master_url(self) -> str:
+        """업체 마스터 시트 URL"""
+        if self._secrets and "vendor_master" in self._secrets:
+            return self._secrets["vendor_master"].get("sheet_url", "")
+        return ""
+
+    def get_shared_folder_id(self) -> str:
+        """구글 드라이브 공유폴더 ID"""
+        if self._secrets and "vendor_master" in self._secrets:
+            return self._secrets["vendor_master"].get("shared_folder_id", "")
+        return "1Uh3c_c7kakXIXlTX8BT89HtBcA3nCY1v"
+
     def get_oauth_credentials_file(self) -> str:
         """OAuth2 인증 파일 경로"""
         return os.path.join(self.config_dir, 'oauth_credentials.json')
@@ -190,6 +202,25 @@ class GoogleSheetClient:
 
         except Exception as e:
             logging.error(f'❌ 시트 업데이트 실패: {e}')
+            return False
+
+    def create_spreadsheet(self, title: str, folder_id: str = None):
+        """새 스프레드시트 생성"""
+        spreadsheet = self.client.create(title, folder_id=folder_id)
+        logging.info(f'✅ 스프레드시트 생성: {title}')
+        return spreadsheet
+
+    def append_row(self, sheet_url: str, row: List[Any], worksheet_index: int = 0) -> bool:
+        """시트에 행 추가"""
+        try:
+            spreadsheet = self.open_sheet_by_url(sheet_url)
+            if not spreadsheet:
+                return False
+            worksheet = spreadsheet.get_worksheet(worksheet_index)
+            worksheet.append_row(row, value_input_option='USER_ENTERED')
+            return True
+        except Exception as e:
+            logging.error(f'❌ 행 추가 실패: {e}')
             return False
 
     def read_sheet(self, sheet_url: str, worksheet_index: int = 0) -> List[List[Any]]:
@@ -408,3 +439,139 @@ def get_latest_file(directory: str, pattern: str = '*.xlsx') -> str:
     # 수정 시간 기준 정렬
     latest_file = max(files, key=os.path.getmtime)
     return latest_file
+
+
+class VendorManager:
+    """업체 마스터 시트 기반 CRUD 관리"""
+
+    HEADERS = ['업체ID', '업체명', '담당자', '전화번호', '이메일', '구글시트URL', '등록일', '상태']
+    SHEET_HEADERS = ['주문일자', '주문번호', '수취인명', '연락처', '주소',
+                     '상품명', '옵션', '수량', '택배사', '송장번호']
+
+    def __init__(self, sheet_client: GoogleSheetClient, master_sheet_url: str,
+                 shared_folder_id: str = '1Uh3c_c7kakXIXlTX8BT89HtBcA3nCY1v'):
+        self.client = sheet_client
+        self.master_url = master_sheet_url
+        self.folder_id = shared_folder_id
+
+    def _read_master(self) -> List[List[str]]:
+        """마스터 시트 전체 데이터 읽기"""
+        return self.client.read_sheet(self.master_url)
+
+    def load_vendors(self) -> List[Dict[str, Any]]:
+        """활성 업체 목록 반환 (발주 처리용 포맷)"""
+        data = self._read_master()
+        if not data or len(data) < 2:
+            return []
+
+        headers = data[0]
+        vendors = []
+        for row in data[1:]:
+            if len(row) < len(headers):
+                row += [''] * (len(headers) - len(row))
+            item = dict(zip(headers, row))
+            if item.get('상태', '') == '비활성':
+                continue
+            vendors.append({
+                'id': item.get('업체ID', ''),
+                'name': item.get('업체명', ''),
+                'contact_person': item.get('담당자', ''),
+                'phone': item.get('전화번호', ''),
+                'email': item.get('이메일', ''),
+                'google_sheet_url': item.get('구글시트URL', ''),
+            })
+        return vendors
+
+    def load_all_vendors(self) -> List[Dict[str, Any]]:
+        """모든 업체 목록 반환 (관리용, 비활성 포함)"""
+        data = self._read_master()
+        if not data or len(data) < 2:
+            return []
+
+        headers = data[0]
+        vendors = []
+        for row in data[1:]:
+            if len(row) < len(headers):
+                row += [''] * (len(headers) - len(row))
+            item = dict(zip(headers, row))
+            vendors.append(item)
+        return vendors
+
+    def add_vendor(self, name: str, contact_person: str, phone: str,
+                   email: str = '', sheet_url: str = None) -> Dict[str, Any]:
+        """업체 추가 (전용 시트 자동 생성 또는 URL 직접 지정)"""
+        vendor_id = f"vendor_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        today = datetime.now().strftime('%Y-%m-%d')
+
+        # 전용 발주서 시트 생성 (URL 미지정 시)
+        if not sheet_url:
+            sheet_url = self._create_vendor_sheet(name)
+
+        row = [vendor_id, name, contact_person, phone, email, sheet_url, today, '활성']
+        self.client.append_row(self.master_url, row)
+
+        return {
+            'id': vendor_id,
+            'name': name,
+            'contact_person': contact_person,
+            'phone': phone,
+            'email': email,
+            'google_sheet_url': sheet_url,
+        }
+
+    def update_vendor(self, vendor_id: str, **fields) -> bool:
+        """업체 정보 수정"""
+        try:
+            spreadsheet = self.client.open_sheet_by_url(self.master_url)
+            if not spreadsheet:
+                return False
+            worksheet = spreadsheet.get_worksheet(0)
+            data = worksheet.get_all_values()
+            if not data:
+                return False
+
+            headers = data[0]
+            id_col = headers.index('업체ID') if '업체ID' in headers else 0
+
+            for row_idx, row in enumerate(data[1:], start=2):
+                if len(row) > id_col and row[id_col] == vendor_id:
+                    for field, value in fields.items():
+                        if field in headers:
+                            col_idx = headers.index(field)
+                            worksheet.update_cell(row_idx, col_idx + 1, value)
+                    return True
+            return False
+        except Exception as e:
+            logging.error(f'❌ 업체 수정 실패: {e}')
+            return False
+
+    def delete_vendor(self, vendor_id: str) -> bool:
+        """업체 비활성화 (소프트 삭제)"""
+        return self.update_vendor(vendor_id, **{'상태': '비활성'})
+
+    def restore_vendor(self, vendor_id: str) -> bool:
+        """업체 재활성화"""
+        return self.update_vendor(vendor_id, **{'상태': '활성'})
+
+    def _create_vendor_sheet(self, vendor_name: str) -> str:
+        """업체 전용 발주서 시트 생성"""
+        try:
+            title = f'[발주도우미] {vendor_name}_발주서'
+            spreadsheet = self.client.create_spreadsheet(title, folder_id=self.folder_id)
+
+            worksheet = spreadsheet.sheet1
+            worksheet.update('A1', [self.SHEET_HEADERS])
+            worksheet.format('A1:J1', {
+                'textFormat': {'bold': True},
+                'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
+            })
+            # 송장번호/택배사 칸 노란 강조
+            worksheet.format('I2:J100', {
+                'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
+            })
+
+            logging.info(f'✅ {vendor_name} 전용 시트 생성: {spreadsheet.url}')
+            return spreadsheet.url
+        except Exception as e:
+            logging.error(f'❌ 시트 생성 실패: {e}')
+            return ''
