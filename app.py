@@ -528,11 +528,121 @@ if not _skip_auth and check_auth():
 
 # 구독 미활성 시 안내
 if not _skip_auth and not st.session_state.get("sso_has_subscription", False):
-    st.warning("발주도우미 구독이 필요합니다.")
-    st.markdown(f"[QuestLoom에서 구독하기]({QUESTLOOM_URL}/console/services)")
     _user = st.session_state.get("sso_user", {})
-    if _user:
-        st.caption(f"로그인: {_user.get('email', '')} | [로그아웃](/?logout=1)")
+    _user_email = _user.get("email", "")
+    _user_name = _user.get("name", "")
+
+    st.markdown(f"""
+    <style>
+    .paywall-wrap {{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 70vh;
+    }}
+    .paywall-card {{
+        max-width: 480px;
+        width: 100%;
+        text-align: center;
+        padding: 48px 40px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #f8faf8 0%, #eef4ee 100%);
+        border: 1px solid #d4e4d4;
+        box-shadow: 0 4px 24px rgba(46,100,60,0.08);
+    }}
+    .paywall-icon {{
+        font-size: 48px;
+        margin-bottom: 16px;
+    }}
+    .paywall-title {{
+        font-size: 22px;
+        font-weight: 700;
+        color: #1a1a1a;
+        margin-bottom: 8px;
+    }}
+    .paywall-desc {{
+        font-size: 15px;
+        color: #666;
+        line-height: 1.6;
+        margin-bottom: 28px;
+    }}
+    .paywall-plans {{
+        display: flex;
+        gap: 12px;
+        margin-bottom: 28px;
+    }}
+    .paywall-plan {{
+        flex: 1;
+        padding: 16px;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        background: #fff;
+    }}
+    .paywall-plan-name {{
+        font-size: 14px;
+        font-weight: 600;
+        color: #2E643C;
+        margin-bottom: 4px;
+    }}
+    .paywall-plan-price {{
+        font-size: 20px;
+        font-weight: 700;
+        color: #1a1a1a;
+    }}
+    .paywall-plan-unit {{
+        font-size: 13px;
+        color: #999;
+    }}
+    .paywall-cta {{
+        display: inline-block;
+        padding: 14px 40px;
+        background: #2E643C;
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        transition: background 0.2s;
+    }}
+    .paywall-cta:hover {{
+        background: #245232;
+        color: #fff !important;
+    }}
+    .paywall-footer {{
+        margin-top: 20px;
+        font-size: 13px;
+        color: #999;
+    }}
+    .paywall-footer a {{
+        color: #2E643C;
+    }}
+    </style>
+    <div class="paywall-wrap">
+        <div class="paywall-card">
+            <div class="paywall-icon">🔒</div>
+            <div class="paywall-title">구독이 필요한 서비스입니다</div>
+            <div class="paywall-desc">
+                {_user_name or _user_email}님, 반갑습니다!<br>
+                발주도우미를 이용하려면 QuestLoom에서 구독을 시작해주세요.
+            </div>
+            <div class="paywall-plans">
+                <div class="paywall-plan">
+                    <div class="paywall-plan-name">스타터</div>
+                    <div class="paywall-plan-price">39,000<span class="paywall-plan-unit">원/월</span></div>
+                </div>
+                <div class="paywall-plan">
+                    <div class="paywall-plan-name">프로</div>
+                    <div class="paywall-plan-price">79,000<span class="paywall-plan-unit">원/월</span></div>
+                </div>
+            </div>
+            <a href="{QUESTLOOM_URL}/console/services" target="_blank" class="paywall-cta">구독 시작하기</a>
+            <div class="paywall-footer">
+                {_user_email} · <a href="/?logout=1">로그아웃</a>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     if st.query_params.get("logout"):
         for key in list(st.session_state.keys()):
             if key.startswith("sso_"):
