@@ -5,7 +5,7 @@ import os
 import json
 import time
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 
 import requests as _requests
@@ -962,25 +962,53 @@ if page == "발주 업로드":
 
     upload_history = load_upload_history()
     if upload_history:
-        for log in upload_history[:10]:
-            with st.expander(f"{log['date']}  |  {', '.join(log['files'])}  |  {log['total_orders']}건"):
-                for v in log.get('vendors', []):
-                    phone = v.get('phone', '')
-                    sheet_url = v.get('sheet_url', '')
-                    sheet_status = "완료" if v.get('sheet_uploaded') else "—"
-                    talk_status = "완료" if v.get('alimtalk_sent') else "—"
-                    link_html = f' · <a href="{sheet_url}" target="_blank" style="color:#2E643C;">시트</a>' if sheet_url else ""
-                    st.markdown(
-                        f"""<div class="list-row" style="margin-bottom:6px;">
-                            <div style="flex:1;">
-                                <div class="list-name">{v['name']}</div>
-                                <div class="list-desc">{v['orders']}건 · 업로드 {sheet_status} · 알림톡 {talk_status}{link_html}</div>
-                            </div>
-                        </div>""",
-                        unsafe_allow_html=True
-                    )
+        # 날짜별 그룹핑
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+
+        groups = {'오늘': [], '어제': [], '이번 주': [], '이전': []}
+        for log in upload_history:
+            log_date = log['date'][:10]  # 'YYYY-MM-DD'
+            if log_date == today_str:
+                groups['오늘'].append(log)
+            elif log_date == yesterday_str:
+                groups['어제'].append(log)
+            elif log_date >= week_ago:
+                groups['이번 주'].append(log)
+            else:
+                groups['이전'].append(log)
+
+        def _render_log(log):
+            time_str = log['date'][11:]  # 'HH:MM'
+            files = ', '.join(log['files'])
+            vendors_html = ''
+            for v in log.get('vendors', []):
+                sheet_url = v.get('sheet_url', '')
+                talk_icon = '✓' if v.get('alimtalk_sent') else '—'
+                link = f'<a href="{sheet_url}" target="_blank" style="color:#2E643C;text-decoration:none;">시트</a>' if sheet_url else ''
+                vendors_html += f'<span style="color:#888;font-size:0.82rem;">{v["name"]} {v["orders"]}건 · 알림톡 {talk_icon} {link}</span><br/>'
+            st.markdown(f"""<div style="background:#F5F5F5;border-radius:12px;padding:0.8rem 1rem;margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-weight:600;font-size:0.9rem;">{files}</span>
+                    <span style="color:#999;font-size:0.8rem;">{time_str} · {log['total_orders']}건</span>
+                </div>
+                <div style="margin-top:4px;">{vendors_html}</div>
+            </div>""", unsafe_allow_html=True)
+
+        for label, logs in groups.items():
+            if not logs:
+                continue
+            if label == '오늘':
+                st.markdown(f'<div style="font-size:0.82rem;font-weight:600;color:#2E643C;margin:0.5rem 0 0.3rem;">오늘 ({len(logs)}건)</div>', unsafe_allow_html=True)
+                for log in logs:
+                    _render_log(log)
+            else:
+                with st.expander(f"{label} ({len(logs)}건)"):
+                    for log in logs:
+                        _render_log(log)
     else:
-        st.info("아직 업로드 기록이 없습니다.")
+        st.markdown('<div style="color:#999;font-size:0.88rem;padding:1rem 0;">아직 업로드 기록이 없습니다.</div>', unsafe_allow_html=True)
 
 
 # ===== 송장 현황 =====
