@@ -1001,14 +1001,10 @@ if page == "발주 업로드":
         for label, logs in groups.items():
             if not logs:
                 continue
-            if label == '오늘':
-                st.markdown(f'<div style="font-size:0.82rem;font-weight:600;color:#2E643C;margin:0.5rem 0 0.3rem;">오늘 ({len(logs)}건)</div>', unsafe_allow_html=True)
+            is_today = label == '오늘'
+            with st.expander(f"{label} ({len(logs)}건)", expanded=is_today):
                 for log in logs:
                     _render_log(log)
-            else:
-                with st.expander(f"{label} ({len(logs)}건)"):
-                    for log in logs:
-                        _render_log(log)
     else:
         st.markdown('<div style="color:#999;font-size:0.88rem;padding:1rem 0;">아직 업로드 기록이 없습니다.</div>', unsafe_allow_html=True)
 
