@@ -536,7 +536,8 @@ def check_auth():
 
     col_l, col_c, col_r = st.columns([1, 2, 1])
     with col_c:
-        st.image("assets/logo.png", width=160)
+        _login_logo_b64 = _load_b64("assets/logo.png")
+        st.markdown(f'<img src="data:image/png;base64,{_login_logo_b64}" style="width:160px;height:auto;" />', unsafe_allow_html=True)
         st.markdown('<div class="login-title">발주도우미</div>', unsafe_allow_html=True)
         st.markdown('<div class="login-subtitle">QuestLoom 계정으로 로그인하세요</div>', unsafe_allow_html=True)
 
@@ -716,7 +717,8 @@ if st.query_params.get("logout"):
 # ===== 상단 헤더 + 탭 네비게이션 =====
 _col_logo, _col_spacer, _col_user = st.columns([1, 2, 1])
 with _col_logo:
-    st.image("assets/logo.png", width=160)
+    _logo_b64 = _load_b64("assets/logo.png")
+    st.markdown(f'<img src="data:image/png;base64,{_logo_b64}" style="width:160px;height:auto;" />', unsafe_allow_html=True)
 with _col_user:
     if not _skip_auth:
         _sso_user = st.session_state.get("sso_user", {})
