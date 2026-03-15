@@ -10,7 +10,7 @@
  */
 
 // 설정
-var SHARED_FOLDER_ID = '1Uh3c_c7kakXIXlTX8BT89HtBcA3nCY1v';
+var SHARED_FOLDER_ID = '1eaWpMk46ghXx-hNS4KpXUOSWxK7S3Iph';
 var SERVICE_ACCOUNT_EMAIL = 'balju-bot@baljoo-helper-test.iam.gserviceaccount.com';
 var HEADERS = ['주문일자', '주문번호', '수취인명', '연락처', '주소', '상품명', '옵션', '수량', '택배사', '송장번호'];
 

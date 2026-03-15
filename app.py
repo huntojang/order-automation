@@ -8,6 +8,7 @@ import base64
 from datetime import datetime
 from io import BytesIO
 
+import requests as _requests
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -427,10 +428,138 @@ def split_by_vendor(df, vendor_column='공급처'):
     return vendor_data
 
 
+# ===== SSO 인증 =====
+QUESTLOOM_URL = "https://questloom.io"
+SSO_SERVICE = "orderhelper"
+
+
+def sso_login(email: str, password: str) -> dict:
+    """questloom.io SSO 로그인"""
+    try:
+        resp = _requests.post(
+            f"{QUESTLOOM_URL}/api/sso/login",
+            json={"email": email, "password": password, "service": SSO_SERVICE},
+            timeout=10
+        )
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def check_auth():
+    """인증 상태 확인. 미인증이면 로그인 폼을 보여주고 True 반환 (= 차단)"""
+    # 쿼리 파라미터로 토큰이 들어온 경우 (questloom.io에서 리다이렉트)
+    token = st.query_params.get("token")
+    if token and "sso_token" not in st.session_state:
+        st.session_state["sso_token"] = token
+        st.session_state["sso_from_redirect"] = True
+
+    if st.session_state.get("sso_authenticated"):
+        return False  # 인증됨 → 차단 안 함
+
+    # 로그인 화면
+    st.markdown("""
+    <style>
+    .login-container {
+        max-width: 400px;
+        margin: 80px auto;
+        padding: 40px;
+        border-radius: 12px;
+        border: 1px solid #e0e0e0;
+        background: #fafafa;
+    }
+    .login-title {
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .login-subtitle {
+        text-align: center;
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        st.image("assets/logo.png", width=160)
+        st.markdown('<div class="login-title">발주도우미</div>', unsafe_allow_html=True)
+        st.markdown('<div class="login-subtitle">QuestLoom 계정으로 로그인하세요</div>', unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            email = st.text_input("이메일")
+            password = st.text_input("비밀번호", type="password")
+            submitted = st.form_submit_button("로그인", type="primary", use_container_width=True)
+
+            if submitted:
+                if not email or not password:
+                    st.error("이메일과 비밀번호를 입력해주세요.")
+                else:
+                    with st.spinner("로그인 중..."):
+                        result = sso_login(email, password)
+
+                    if result.get("error"):
+                        error_msg = result["error"]
+                        if "Invalid email" in error_msg:
+                            st.error("이메일 또는 비밀번호가 올바르지 않습니다.")
+                        else:
+                            st.error(f"로그인 실패: {error_msg}")
+                    elif result.get("token"):
+                        st.session_state["sso_token"] = result["token"]
+                        st.session_state["sso_user"] = result.get("user", {})
+                        st.session_state["sso_subscriptions"] = result.get("subscriptions", [])
+                        st.session_state["sso_authenticated"] = True
+                        st.session_state["sso_has_subscription"] = result.get("hasActiveSubscription", False)
+                        st.rerun()
+
+        st.markdown("---")
+        st.caption(f"아직 계정이 없으신가요? [QuestLoom에서 가입하기]({QUESTLOOM_URL}/signup)")
+
+    return True  # 미인증 → 차단
+
+
+# 인증 체크 (개발 모드에서는 건너뛸 수 있도록)
+_skip_auth = os.environ.get("SKIP_AUTH", "").lower() == "true"
+if not _skip_auth and check_auth():
+    st.stop()
+
+# 구독 미활성 시 안내
+if not _skip_auth and not st.session_state.get("sso_has_subscription", False):
+    st.warning("발주도우미 구독이 필요합니다.")
+    st.markdown(f"[QuestLoom에서 구독하기]({QUESTLOOM_URL}/console/services)")
+    _user = st.session_state.get("sso_user", {})
+    if _user:
+        st.caption(f"로그인: {_user.get('email', '')} | [로그아웃](/?logout=1)")
+    if st.query_params.get("logout"):
+        for key in list(st.session_state.keys()):
+            if key.startswith("sso_"):
+                del st.session_state[key]
+        st.query_params.clear()
+        st.rerun()
+    st.stop()
+
+# 로그아웃 처리
+if st.query_params.get("logout"):
+    for key in list(st.session_state.keys()):
+        if key.startswith("sso_"):
+            del st.session_state[key]
+    st.query_params.clear()
+    st.rerun()
+
+
 # ===== 상단 헤더 + 탭 네비게이션 =====
-_col_logo, _col_spacer = st.columns([1, 3])
+_col_logo, _col_spacer, _col_user = st.columns([1, 2, 1])
 with _col_logo:
     st.image("assets/logo.png", width=160)
+with _col_user:
+    if not _skip_auth:
+        _sso_user = st.session_state.get("sso_user", {})
+        _user_email = _sso_user.get("email", "")
+        if _user_email:
+            st.markdown(f'<div style="text-align:right;padding-top:12px;font-size:13px;color:#666;">{_user_email} · <a href="/?logout=1">로그아웃</a></div>', unsafe_allow_html=True)
 
 st.markdown('<div class="nav-tabs">', unsafe_allow_html=True)
 page = st.radio(
