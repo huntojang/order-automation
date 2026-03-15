@@ -251,11 +251,12 @@ st.markdown("""
         border-radius: 16px !important; border: 2px dashed #D5D5D5 !important;
         background: #FAFAFA !important; padding: 2rem !important;
     }
-    [data-testid="stFileUploader"] button[data-testid="stBaseButton-secondary"] {
-        font-size: 0 !important;
+    [data-testid="stFileUploaderDropzone"] button {
+        font-size: 0 !important; line-height: 0 !important;
     }
-    [data-testid="stFileUploader"] button[data-testid="stBaseButton-secondary"]::after {
-        content: "엑셀업로드" !important; font-size: 1rem !important;
+    [data-testid="stFileUploaderDropzone"] button::after {
+        content: "엑셀업로드" !important; font-size: 0.875rem !important;
+        line-height: normal !important;
     }
 
     /* ===== expander ===== */
