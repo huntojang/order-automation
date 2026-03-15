@@ -472,11 +472,14 @@ class VendorManager:
             item = dict(zip(headers, row))
             if item.get('상태', '') == '비활성':
                 continue
+            phone = str(item.get('전화번호', '')).strip()
+            if phone and not phone.startswith('0'):
+                phone = '0' + phone
             vendors.append({
                 'id': item.get('업체ID', ''),
                 'name': item.get('업체명', ''),
                 'contact_person': item.get('담당자', ''),
-                'phone': item.get('전화번호', ''),
+                'phone': phone,
                 'email': item.get('이메일', ''),
                 'google_sheet_url': item.get('구글시트URL', ''),
             })
@@ -494,6 +497,10 @@ class VendorManager:
             if len(row) < len(headers):
                 row += [''] * (len(headers) - len(row))
             item = dict(zip(headers, row))
+            phone = str(item.get('전화번호', '')).strip()
+            if phone and not phone.startswith('0'):
+                phone = '0' + phone
+            item['전화번호'] = phone
             vendors.append(item)
         return vendors
 
