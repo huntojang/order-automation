@@ -446,28 +446,69 @@ def sso_login(email: str, password: str) -> dict:
         return {"error": str(e)}
 
 
+def _decode_jwt_payload(token: str) -> dict:
+    """JWT 페이로드를 디코딩 (서명 검증 없이 — 만료 체크용)"""
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return {}
+        payload_b64 = parts[1]
+        # base64 패딩 보정
+        padding = 4 - len(payload_b64) % 4
+        if padding != 4:
+            payload_b64 += "=" * padding
+        payload_json = base64.urlsafe_b64decode(payload_b64)
+        return json.loads(payload_json)
+    except Exception:
+        return {}
+
+
+def _restore_session_from_token(token: str) -> bool:
+    """JWT 토큰에서 세션 복원. 만료됐으면 False"""
+    payload = _decode_jwt_payload(token)
+    if not payload:
+        return False
+
+    # 만료 체크
+    exp = payload.get("exp", 0)
+    if time.time() > exp:
+        return False
+
+    # 구독 정보 추출
+    subs = payload.get("subscriptions", [])
+    has_orderhelper = any(s.get("serviceSlug") == SSO_SERVICE for s in subs)
+
+    st.session_state["sso_token"] = token
+    st.session_state["sso_authenticated"] = True
+    st.session_state["sso_user"] = {
+        "id": payload.get("userId", ""),
+        "email": payload.get("email", ""),
+        "companyId": payload.get("companyId", ""),
+        "role": payload.get("role", ""),
+    }
+    st.session_state["sso_subscriptions"] = subs
+    st.session_state["sso_has_subscription"] = has_orderhelper
+    return True
+
+
 def check_auth():
     """인증 상태 확인. 미인증이면 로그인 폼을 보여주고 True 반환 (= 차단)"""
-    # 쿼리 파라미터로 토큰이 들어온 경우 (questloom.io에서 리다이렉트)
-    token = st.query_params.get("token")
-    if token and "sso_token" not in st.session_state:
-        st.session_state["sso_token"] = token
-        st.session_state["sso_from_redirect"] = True
-
+    # 이미 인증됨
     if st.session_state.get("sso_authenticated"):
-        return False  # 인증됨 → 차단 안 함
+        return False
+
+    # 쿼리 파라미터에 토큰이 있으면 세션 복원 시도 (새로고침 / 리다이렉트)
+    token = st.query_params.get("token")
+    if token:
+        if _restore_session_from_token(token):
+            return False  # 복원 성공
+        else:
+            # 토큰 만료 → 파라미터 제거
+            st.query_params.clear()
 
     # 로그인 화면
     st.markdown("""
     <style>
-    .login-container {
-        max-width: 400px;
-        margin: 80px auto;
-        padding: 40px;
-        border-radius: 12px;
-        border: 1px solid #e0e0e0;
-        background: #fafafa;
-    }
     .login-title {
         text-align: center;
         font-size: 24px;
@@ -513,6 +554,8 @@ def check_auth():
                         st.session_state["sso_subscriptions"] = result.get("subscriptions", [])
                         st.session_state["sso_authenticated"] = True
                         st.session_state["sso_has_subscription"] = result.get("hasActiveSubscription", False)
+                        # 토큰을 쿼리 파라미터에 저장 (새로고침 시 유지)
+                        st.query_params["token"] = result["token"]
                         st.rerun()
 
         st.markdown("---")
