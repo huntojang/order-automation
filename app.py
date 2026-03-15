@@ -251,6 +251,12 @@ st.markdown("""
         border-radius: 16px !important; border: 2px dashed #D5D5D5 !important;
         background: #FAFAFA !important; padding: 2rem !important;
     }
+    [data-testid="stFileUploader"] button[data-testid="stBaseButton-secondary"] {
+        font-size: 0 !important;
+    }
+    [data-testid="stFileUploader"] button[data-testid="stBaseButton-secondary"]::after {
+        content: "엑셀업로드" !important; font-size: 1rem !important;
+    }
 
     /* ===== expander ===== */
     [data-testid="stExpander"] summary {
@@ -774,16 +780,18 @@ if page == "발주 업로드":
 
     if uploaded_files:
         all_dfs = []
+        file_summaries = []
         for f in uploaded_files:
             if f.name.endswith('.csv'):
                 df = pd.read_csv(f, encoding='utf-8')
             else:
                 df = pd.read_excel(f, engine='openpyxl')
             all_dfs.append(df)
-            st.success(f"{f.name} — {len(df)}건 로드")
+            file_summaries.append(f"{f.name} — {len(df)}건")
 
         merged_df = pd.concat(all_dfs, ignore_index=True)
-        st.info(f"총 주문 건수: **{len(merged_df)}건**")
+        summary_text = " | ".join(file_summaries) + f"  ·  총 **{len(merged_df)}건**"
+        st.success(summary_text)
 
         # 미리보기
         with st.expander("데이터 미리보기", expanded=False):
