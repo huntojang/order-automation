@@ -350,9 +350,8 @@ def get_sheet_client():
     return None
 
 
-@st.cache_data(ttl=300)
 def load_vendors():
-    """업체 정보 로드 (마스터 시트 우선, 5분 캐시)"""
+    """업체 정보 로드 (마스터 시트 우선, 캐시 없음)"""
     config = Config()
     master_url = config.get_vendor_master_url()
     if master_url:
