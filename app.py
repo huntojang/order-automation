@@ -1216,6 +1216,27 @@ elif page == "송장 다운로드":
         st.markdown("---")
         st.markdown(f'<div class="section-title">수집 결과: {len(combined)}건</div>', unsafe_allow_html=True)
 
+        # 택배사명 정규화 (띄어쓰기, 오타 통일)
+        COURIER_ALIASES = {
+            '로젠': '로젠택배', '로젠 택배': '로젠택배',
+            'CJ': 'CJ대한통운', 'CJ 대한통운': 'CJ대한통운', 'cj대한통운': 'CJ대한통운',
+            'cj 대한통운': 'CJ대한통운', 'CJ택배': 'CJ대한통운', 'CJ 택배': 'CJ대한통운',
+            '대한통운': 'CJ대한통운',
+            '한진': '한진택배', '한진 택배': '한진택배',
+            '우체국': '우체국택배', '우체국 택배': '우체국택배', '우편': '우체국택배',
+            '롯데': '롯데택배', '롯데 택배': '롯데택배',
+            '경동': '경동택배', '경동 택배': '경동택배',
+            '합동': '합동택배', '합동 택배': '합동택배',
+            '일양': '일양로지스', '일양 로지스': '일양로지스',
+            '건영': '건영택배', '건영 택배': '건영택배',
+            '천일': '천일택배', '천일 택배': '천일택배',
+            '호남': '호남택배', '호남 택배': '호남택배',
+        }
+        if '택배사' in combined.columns:
+            combined['택배사'] = combined['택배사'].apply(
+                lambda x: COURIER_ALIASES.get(str(x).strip(), str(x).strip()) if pd.notna(x) and str(x).strip() else x
+            )
+
         # 택배사별 현황 카드
         courier_groups = {}
         if '택배사' in combined.columns:
@@ -1238,7 +1259,7 @@ elif page == "송장 다운로드":
 
         download_mode = st.radio(
             "다운로드 방식",
-            ["전체 통합 (1개 파일)", "택배사별 분리 (시트 나눔)", "택배사별 개별 파일"],
+            ["전체 통합 (1개 파일)", "택배사별 개별 파일"],
             horizontal=True,
             label_visibility="visible"
         )
@@ -1255,26 +1276,6 @@ elif page == "송장 다운로드":
                 type="primary",
                 use_container_width=True
             )
-
-        elif download_mode == "택배사별 분리 (시트 나눔)":
-            if not courier_groups:
-                st.warning("택배사 정보가 없어요.")
-            else:
-                st.caption(f"1개 엑셀 파일 안에 택배사별 시트로 분리돼요. ({', '.join(courier_groups.keys())})")
-                buffer = BytesIO()
-                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                    for courier, group in courier_groups.items():
-                        sheet_name = courier[:31]  # 시트명 31자 제한
-                        group[available_cols].to_excel(writer, sheet_name=sheet_name, index=False)
-                buffer.seek(0)
-                st.download_button(
-                    label=f"택배사별 시트 다운로드 (송장_{today}_택배사별.xlsx)",
-                    data=buffer,
-                    file_name=f"송장_{today}_택배사별.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary",
-                    use_container_width=True
-                )
 
         elif download_mode == "택배사별 개별 파일":
             if not courier_groups:
