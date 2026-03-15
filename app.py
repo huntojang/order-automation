@@ -781,24 +781,23 @@ if page == "발주 업로드":
 
     if uploaded_files:
         all_dfs = []
-        file_summaries = []
+        file_names = []
         for f in uploaded_files:
             if f.name.endswith('.csv'):
                 df = pd.read_csv(f, encoding='utf-8')
             else:
                 df = pd.read_excel(f, engine='openpyxl')
             all_dfs.append(df)
-            file_summaries.append(f"{f.name} — {len(df)}건")
+            file_names.append(f.name)
 
         merged_df = pd.concat(all_dfs, ignore_index=True)
-        summary_text = " | ".join(file_summaries) + f"  ·  총 **{len(merged_df)}건**"
-        st.success(summary_text)
 
-        # 미리보기
-        with st.expander("데이터 미리보기", expanded=False):
+        # [1] 파일명 — 데이터 미리보기 (총 OO건)
+        file_label = ", ".join(file_names)
+        with st.expander(f"{file_label} — 데이터 미리보기 (총 {len(merged_df)}건)", expanded=False):
             st.dataframe(merged_df.head(10), use_container_width=True)
 
-        # 공급처별 분류
+        # [2] 공급처별 주문 현황
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
             st.markdown('<div class="section-title">공급처별 주문 현황</div>', unsafe_allow_html=True)
@@ -806,8 +805,6 @@ if page == "발주 업로드":
             for i, (name, vdf) in enumerate(vendor_data.items()):
                 with cols[i % len(cols)]:
                     st.metric(name, f"{len(vdf)}건")
-
-        st.markdown("---")
 
         # 발주 실행 버튼
         if st.button("발주 실행", type="primary", use_container_width=True):
