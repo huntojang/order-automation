@@ -1001,8 +1001,7 @@ if page == "발주 업로드":
         for label, logs in groups.items():
             if not logs:
                 continue
-            is_today = label == '오늘'
-            with st.expander(f"{label} ({len(logs)}건)", expanded=is_today):
+            with st.expander(f"{label} ({len(logs)}건)", expanded=False):
                 for log in logs:
                     _render_log(log)
     else:
