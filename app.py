@@ -227,6 +227,29 @@ st.markdown("""
     button, .stButton > button {
         border-radius: 12px !important; font-weight: 500 !important;
     }
+    /* form submit 버튼도 동일 색상 */
+    [data-testid="stFormSubmitButton"] > button,
+    [data-testid="stFormSubmitButton"] > button[kind="secondaryFormSubmit"],
+    [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
+        background-color: #2E643C !important; color: white !important;
+        border: none !important; border-radius: 12px !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stFormSubmitButton"] > button:hover {
+        background-color: #255633 !important;
+        box-shadow: 0 4px 16px rgba(46,100,60,0.25) !important;
+    }
+
+    /* ===== 입력 필드 ===== */
+    [data-testid="stTextInput"] input {
+        background-color: #F0F7F2 !important;
+        border: 1px solid #D4E6D9 !important;
+        border-radius: 10px !important;
+    }
+    [data-testid="stTextInput"] input:focus {
+        border-color: #2E643C !important;
+        box-shadow: 0 0 0 1px #2E643C !important;
+    }
 
     /* ===== 프로그레스바 ===== */
     [data-testid="stProgress"] > div > div > div,
