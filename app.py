@@ -258,31 +258,15 @@ st.markdown("""
         content: "엑셀업로드" !important; font-size: 0.875rem !important;
         line-height: normal !important;
     }
-    /* 업로드된 파일명 영역: 하단 둥글기 제거 + 간격 제거 */
-    [data-testid="stFileUploader"] [data-testid="stFileUploaderFile"] {
-        border-bottom-left-radius: 0 !important;
-        border-bottom-right-radius: 0 !important;
-        border-bottom: none !important;
-        margin-bottom: 0 !important;
-        padding-bottom: 0.6rem !important;
-        background: #F5F5F5 !important;
-        border: 1px solid #E0E0E0 !important;
-        border-bottom: none !important;
-        border-radius: 12px 12px 0 0 !important;
-        padding: 0.8rem 1rem !important;
-    }
-    /* 파일명 바로 뒤 expander와 간격 제거 */
-    [data-testid="stFileUploader"] {
-        margin-bottom: -1rem !important;
+    /* 업로드된 파일명 영역 숨기기 (expander에서 표시) */
+    [data-testid="stFileUploaderFile"] {
+        display: none !important;
     }
 
     /* ===== expander ===== */
     [data-testid="stExpander"] summary {
-        background: #F5F5F5 !important;
+        background: #F5F5F5 !important; border-radius: 12px !important;
         font-weight: 500 !important; padding: 0.8rem 1rem !important;
-        border-radius: 0 0 12px 12px !important;
-        border: 1px solid #E0E0E0 !important;
-        border-top: none !important;
     }
 
     /* ===== 다운로드 버튼 ===== */
