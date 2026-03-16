@@ -831,11 +831,15 @@ if page == "발주 업로드":
         # [2] 공급처별 주문 현황
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
-            st.markdown('<div class="section-title">공급처별 주문 현황</div>', unsafe_allow_html=True)
-            cols = st.columns(len(vendor_data))
-            for i, (name, vdf) in enumerate(vendor_data.items()):
-                with cols[i % len(cols)]:
-                    st.metric(name, f"{len(vdf)}건")
+            with st.expander(f"공급처별 주문 현황 ({len(vendor_data)}개 업체)", expanded=False):
+                grid_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;">'
+                for name, vdf in vendor_data.items():
+                    grid_html += f'''<div style="background:#F5F5F5;border-radius:10px;padding:10px 12px;text-align:center;">
+                        <div style="font-size:0.78rem;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">{name}</div>
+                        <div style="font-size:1.2rem;font-weight:700;color:#1A1A1A;">{len(vdf)}건</div>
+                    </div>'''
+                grid_html += '</div>'
+                st.markdown(grid_html, unsafe_allow_html=True)
 
         # 발주 실행 버튼
         if st.button("발주 실행", type="primary", use_container_width=True):
