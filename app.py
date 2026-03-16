@@ -421,14 +421,15 @@ def fetch_all_vendor_sheets(_client, vendors):
 def prepare_sheet_data(df):
     """구글 시트에 업로드할 데이터 준비"""
     column_mapping = {
-        '주문일자': ['주문일자'],
+        '관리번호': ['관리번호'],
         '주문번호': ['주문번호'],
-        '수취인명': ['수취인명', '수령자 이름'],
-        '연락처': ['연락처', '수령자 휴대폰번호', '수령자 전화'],
-        '주소': ['주소', '수령자 주소'],
+        '수취인명': ['수취인명', '수령자 이름', '수령자이름'],
+        '연락처': ['연락처', '수령자 휴대폰번호', '수령자 전화', '수령자휴대폰', '수령자전화'],
+        '주소': ['주소', '수령자 주소', '수령자주소'],
         '상품명': ['상품명'],
         '옵션': ['옵션', '옵션명'],
         '수량': ['수량', '상품수량'],
+        '배송메모': ['배송메모'],
         '택배사': ['택배사'],
         '송장번호': ['송장번호'],
     }
@@ -802,7 +803,7 @@ if page == "발주 업로드":
 
     uploaded_files = st.file_uploader(
         "이지어드민 발주서 엑셀/CSV 파일을 올려주세요",
-        type=['xlsx', 'csv'],
+        type=['xlsx', 'xls', 'csv'],
         accept_multiple_files=True,
         help="여러 파일을 한번에 올릴 수 있습니다"
     )
@@ -813,6 +814,8 @@ if page == "발주 업로드":
         for f in uploaded_files:
             if f.name.endswith('.csv'):
                 df = pd.read_csv(f, encoding='utf-8')
+            elif f.name.endswith('.xls'):
+                df = pd.read_excel(f, engine='xlrd')
             else:
                 df = pd.read_excel(f, engine='openpyxl')
             all_dfs.append(df)
