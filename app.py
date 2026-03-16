@@ -271,8 +271,8 @@ st.markdown("""
 
     /* ===== 파일 업로더 ===== */
     [data-testid="stFileUploader"] section {
-        border-radius: 16px !important; border: 2px dashed #B8D4BE !important;
-        background: #D4E6D9 !important; padding: 2rem !important;
+        border-radius: 16px !important; border: 2px dashed #C8DECE !important;
+        background: #E8F3EB !important; padding: 2rem !important;
     }
     [data-testid="stFileUploaderDropzone"] button {
         font-size: 0 !important; line-height: 0 !important;
