@@ -147,7 +147,7 @@ class GoogleSheetClient:
             return None
 
     def update_sheet(self, sheet_url: str, data: List[List[Any]],
-                     worksheet_index: int = 0) -> bool:
+                     worksheet_index: int = 0):
         """
         시트 데이터 업데이트
 
@@ -157,12 +157,12 @@ class GoogleSheetClient:
             worksheet_index: 워크시트 인덱스 (기본값: 0)
 
         Returns:
-            성공 여부
+            성공 시 True, 실패 시 에러 메시지 문자열
         """
         try:
             spreadsheet = self.open_sheet_by_url(sheet_url)
             if not spreadsheet:
-                return False
+                return "시트를 열 수 없습니다 (권한 없음 또는 URL 오류)"
 
             worksheet = spreadsheet.get_worksheet(worksheet_index)
 
@@ -202,7 +202,7 @@ class GoogleSheetClient:
 
         except Exception as e:
             logging.error(f'❌ 시트 업데이트 실패: {e}')
-            return False
+            return str(e)
 
     def create_spreadsheet(self, title: str, folder_id: str = None):
         """새 스프레드시트 생성"""
