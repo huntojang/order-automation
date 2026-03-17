@@ -163,12 +163,7 @@ class GoogleSheetClient:
     def update_sheet(self, sheet_url: str, data: List[List[Any]],
                      worksheet_index: int = 0):
         """
-        시트 데이터 업데이트
-
-        Args:
-            sheet_url: 구글 시트 URL
-            data: 업데이트할 데이터 (2차원 리스트)
-            worksheet_index: 워크시트 인덱스 (기본값: 0)
+        시트 데이터 업데이트 (API 호출 최소화: clear 생략, 빈 행 패딩)
 
         Returns:
             성공 시 True, 실패 시 에러 메시지 문자열
@@ -180,15 +175,15 @@ class GoogleSheetClient:
 
             worksheet = spreadsheet.get_worksheet(worksheet_index)
 
-            # 기존 데이터 클리어 + 새 데이터 삽입
-            self._retry_on_quota(lambda: worksheet.clear())
+            # clear() 호출 생략 — 빈 행 패딩으로 이전 데이터 덮어쓰기
             if data:
-                self._retry_on_quota(lambda: worksheet.update('A1', data))
+                num_cols = len(data[0])
+                MAX_ROWS = max(len(data) + 10, 100)
+                padded = data + [[''] * num_cols] * (MAX_ROWS - len(data))
+                self._retry_on_quota(lambda: worksheet.update('A1', padded))
 
-            # batch_format으로 서식을 한 번의 API 호출로 처리
+            # batch_format: 헤더 + 송장칸 서식을 1번의 API 호출로
             format_requests = []
-
-            # 헤더 행 서식 (굵게, 배경색)
             if len(data) > 0:
                 num_cols = len(data[0])
                 last_col_letter = chr(ord('A') + num_cols - 1) if num_cols <= 26 else 'Z'
@@ -199,8 +194,6 @@ class GoogleSheetClient:
                         'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
                     }
                 })
-
-            # 송장번호/택배사 칸 노란색 강조
             if len(data) > 1:
                 last_row = len(data)
                 headers = data[0]
@@ -214,7 +207,6 @@ class GoogleSheetClient:
                                 'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
                             }
                         })
-
             if format_requests:
                 self._retry_on_quota(lambda: worksheet.batch_format(format_requests))
 

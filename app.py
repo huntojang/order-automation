@@ -390,36 +390,46 @@ def load_vendors():
     return config.load_vendors()
 
 
-def fetch_all_vendor_sheets(_client, vendors):
-    """모든 업체 시트 데이터를 가져오기 (session_state 캐시, 60초 TTL)"""
+def fetch_all_vendor_sheets(_client, vendors, active_only=True):
+    """업체 시트 데이터 가져오기 (주문 있는 업체만, 캐시 60초)"""
     now = time.time()
     cache = st.session_state.get('_sheet_cache', {})
     cache_time = st.session_state.get('_sheet_cache_time', 0)
 
-    # 60초 이내면 캐시 반환 (Rate Limit 방지)
     if cache and (now - cache_time) < 60:
         return cache
 
+    # 주문 업로드된 업체만 읽기 (API 호출 대폭 절감)
+    uploaded = st.session_state.get('_upload_results', {})
+    active_vendors = set(uploaded.keys()) if (active_only and uploaded) else None
+
     result = {}
     fail_count = 0
+    read_count = 0
     if not _client or not vendors:
         return result
-    for i, v in enumerate(vendors):
+    for v in vendors:
+        name = v['name']
         url = v.get('google_sheet_url', '')
         if not url:
+            continue
+        # 주문 없는 업체는 건너뛰기
+        if active_vendors and name not in active_vendors:
             continue
         try:
             data = _client.read_sheet(url)
             if data:
-                result[v['name']] = data
+                result[name] = data
             else:
                 fail_count += 1
-                result[v['name']] = None
+                result[name] = None
         except Exception:
             fail_count += 1
-            result[v['name']] = None
-        if i > 0 and i % 8 == 0:
-            time.sleep(3)
+            result[name] = None
+        read_count += 1
+        # 20개 넘으면 2초 쉬기
+        if read_count > 0 and read_count % 20 == 0:
+            time.sleep(2)
 
     st.session_state['_sheet_cache'] = result
     st.session_state['_sheet_cache_time'] = now
@@ -912,7 +922,7 @@ if page == "발주 업로드":
                         with status_container:
                             st.warning(f"{vendor_name} — 시트 URL 없음")
 
-                    time.sleep(1.5)
+                    time.sleep(0.5)
 
                 progress.progress(1.0, text="시트 업로드 완료!")
 
@@ -1251,10 +1261,14 @@ elif page == "송장 다운로드":
 
             all_invoices = []
 
-            for idx, vendor_info in enumerate(vendors_info):
+            # 주문 업로드된 업체만 수집 (API 호출 절감)
+            uploaded = st.session_state.get('_upload_results', {})
+            target_vendors = [v for v in vendors_info if v['name'] in uploaded] if uploaded else vendors_info
+
+            for idx, vendor_info in enumerate(target_vendors):
                 vendor_name = vendor_info['name']
                 sheet_url = vendor_info.get('google_sheet_url', '')
-                progress.progress((idx + 1) / len(vendors_info), text=f"수집 중: {vendor_name}")
+                progress.progress((idx + 1) / len(target_vendors), text=f"수집 중: {vendor_name}")
 
                 if not sheet_url:
                     continue
