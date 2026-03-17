@@ -391,16 +391,17 @@ def load_vendors():
 
 
 def fetch_all_vendor_sheets(_client, vendors):
-    """모든 업체 시트 데이터를 가져오기 (session_state 캐시, 20초 TTL)"""
+    """모든 업체 시트 데이터를 가져오기 (session_state 캐시, 60초 TTL)"""
     now = time.time()
     cache = st.session_state.get('_sheet_cache', {})
     cache_time = st.session_state.get('_sheet_cache_time', 0)
 
-    # 20초 이내면 캐시 반환
-    if cache and (now - cache_time) < 20:
+    # 60초 이내면 캐시 반환 (Rate Limit 방지)
+    if cache and (now - cache_time) < 60:
         return cache
 
     result = {}
+    fail_count = 0
     if not _client or not vendors:
         return result
     for i, v in enumerate(vendors):
@@ -409,14 +410,20 @@ def fetch_all_vendor_sheets(_client, vendors):
             continue
         try:
             data = _client.read_sheet(url)
-            result[v['name']] = data
+            if data:
+                result[v['name']] = data
+            else:
+                fail_count += 1
+                result[v['name']] = None
         except Exception:
+            fail_count += 1
             result[v['name']] = None
-        if i > 0 and i % 10 == 0:
-            time.sleep(2)
+        if i > 0 and i % 8 == 0:
+            time.sleep(3)
 
     st.session_state['_sheet_cache'] = result
     st.session_state['_sheet_cache_time'] = now
+    st.session_state['_sheet_fetch_fails'] = fail_count
     return result
 
 
@@ -833,12 +840,28 @@ if page == "발주 업로드":
         # [2] 공급처별 주문 현황
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
+            _upload_results = st.session_state.get('_upload_results', {})
+            _alimtalk_results = st.session_state.get('_alimtalk_results', {})
             with st.expander(f"공급처별 주문 현황 ({len(vendor_data)}개 업체)", expanded=False):
-                grid_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;">'
+                grid_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;">'
                 for name, vdf in vendor_data.items():
+                    # 뱃지 HTML 생성
+                    badges_html = ''
+                    if _upload_results:
+                        up_ok = _upload_results.get(name)
+                        if up_ok is True:
+                            badges_html += '<span style="background:#E8F5E9;color:#2E643C;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">시트</span> '
+                        elif up_ok is not None:
+                            badges_html += '<span style="background:#FFEBEE;color:#C62828;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">실패</span> '
+                        al_ok = _alimtalk_results.get(name)
+                        if al_ok is True:
+                            badges_html += '<span style="background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">알림톡</span>'
+                        elif al_ok is False:
+                            badges_html += '<span style="background:#FFF3E0;color:#E65100;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">미발송</span>'
                     grid_html += f'''<div style="background:#F5F5F5;border-radius:10px;padding:10px 12px;text-align:center;">
                         <div style="font-size:0.78rem;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">{name}</div>
                         <div style="font-size:1.2rem;font-weight:700;color:#1A1A1A;">{len(vdf)}건</div>
+                        <div style="margin-top:4px;min-height:16px;">{badges_html}</div>
                     </div>'''
                 grid_html += '</div>'
                 st.markdown(grid_html, unsafe_allow_html=True)
@@ -856,14 +879,13 @@ if page == "발주 업로드":
 
                 total = len(vendors_info)
                 success_count = 0
+                _upload_results = {}
 
                 for idx, vendor_info in enumerate(vendors_info):
                     vendor_name = vendor_info['name']
                     progress.progress((idx + 1) / total, text=f"처리 중: {vendor_name}")
 
                     if vendor_name not in vendor_data:
-                        with status_container:
-                            st.warning(f"{vendor_name} — 주문 없음")
                         continue
 
                     vendor_df = vendor_data[vendor_name]
@@ -875,16 +897,18 @@ if page == "발주 업로드":
                         try:
                             result = sheet_client.update_sheet(sheet_url, sheet_data)
                             if result is True:
-                                with status_container:
-                                    st.success(f"{vendor_name} — {len(vendor_df)}건 업로드 완료")
+                                _upload_results[vendor_name] = True
                                 success_count += 1
                             else:
+                                _upload_results[vendor_name] = False
                                 with status_container:
                                     st.error(f"{vendor_name} — 업로드 실패: {result}")
                         except Exception as e:
+                            _upload_results[vendor_name] = False
                             with status_container:
                                 st.error(f"{vendor_name} — 업로드 오류: {e}")
                     else:
+                        _upload_results[vendor_name] = False
                         with status_container:
                             st.warning(f"{vendor_name} — 시트 URL 없음")
 
@@ -895,6 +919,7 @@ if page == "발주 업로드":
                 # 알림톡 발송 (실제 API 호출)
                 alimtalk_config = Config().load_alimtalk_config()
                 _alimtalk_logs = []
+                _alimtalk_results = {}
                 for vendor_info in vendors_info:
                     vendor_name = vendor_info['name']
                     if vendor_name not in vendor_data:
@@ -904,6 +929,7 @@ if page == "발주 업로드":
                     sent = False
                     if alimtalk_config:
                         sent = send_alimtalk(vendor_info, order_count, alimtalk_config)
+                    _alimtalk_results[vendor_name] = sent
                     _alimtalk_logs.append({
                         'name': vendor_name,
                         'phone': vendor_info.get('phone', ''),
@@ -913,6 +939,8 @@ if page == "발주 업로드":
                     })
                     time.sleep(0.3)
 
+                st.session_state['_upload_results'] = _upload_results
+                st.session_state['_alimtalk_results'] = _alimtalk_results
                 st.session_state['alimtalk_logs'] = _alimtalk_logs
                 st.session_state['alimtalk_date'] = datetime.now().strftime('%Y년 %m월 %d일')
 
@@ -964,37 +992,23 @@ if page == "발주 업로드":
                 else:
                     st.success(f"발주 처리 완료! {success_count}개 업체에 총 {len(merged_df)}건 시트 업로드 완료 (알림톡 미설정)")
 
-        # 알림톡 발송 내역
+        # 알림톡 발송 내역 (메시지 미리보기만 유지)
         if st.session_state.get('alimtalk_logs'):
-            st.markdown("---")
-            st.markdown('<div class="section-title">알림톡 발송 현황</div>', unsafe_allow_html=True)
             _date = st.session_state.get('alimtalk_date', '')
-            for _al in st.session_state['alimtalk_logs']:
-                _sent = _al.get('sent', False)
-                _status = "발송 완료" if _sent else "미설정"
-                _cls = "list-row-active" if _sent else ""
-                st.markdown(f"""
-                <div class="list-row {_cls}">
-                    <div style="flex:1;">
-                        <div class="list-name">{_al['name']}</div>
-                        <div class="list-desc" style="{'color:rgba(255,255,255,0.6);' if _sent else ''}">{_al['phone']} · {_al['count']}건 · {_status}</div>
-                    </div>
-                    <a href="{_al['sheet_url']}" target="_blank" style="text-decoration:none;">
-                        <div class="list-arrow">→</div>
-                    </a>
-                </div>""", unsafe_allow_html=True)
-            with st.expander("발송된 메시지 미리보기"):
-                for _al in st.session_state['alimtalk_logs']:
-                    st.markdown(f"""
-                    <div class="kakao-msg">
-                        안녕하세요, {_al['name']} 사장님.<br>
-                        {_date} 신규 주문 <strong>{_al['count']}건</strong>이 등록되었습니다.<br><br>
-                        아래 링크에서 주문 내역 확인 후,<br>
-                        '송장번호, 택배사' 칸에 입력 부탁드립니다.<br><br>
-                        ※ 발송 완료 후 별도 연락은 필요 없습니다.<br><br>
-                        ▶ <a href="{_al['sheet_url']}" target="_blank">발주서 확인하기</a>
-                    </div>
-                    """, unsafe_allow_html=True)
+            _sent_logs = [_al for _al in st.session_state['alimtalk_logs'] if _al.get('sent')]
+            if _sent_logs:
+                with st.expander(f"발송된 알림톡 미리보기 ({len(_sent_logs)}건)"):
+                    for _al in _sent_logs:
+                        st.markdown(f"""
+                        <div class="kakao-msg">
+                            안녕하세요, {_al['name']} 사장님.<br>
+                            {_date} 신규 주문 <strong>{_al['count']}건</strong>이 등록되었습니다.<br><br>
+                            아래 링크에서 주문 내역 확인 후,<br>
+                            '송장번호, 택배사' 칸에 입력 부탁드립니다.<br><br>
+                            ※ 발송 완료 후 별도 연락은 필요 없습니다.<br><br>
+                            ▶ <a href="{_al['sheet_url']}" target="_blank">발주서 확인하기</a>
+                        </div>
+                        """, unsafe_allow_html=True)
 
 
     # 발주 업로드 기록
@@ -1051,8 +1065,8 @@ if page == "발주 업로드":
 elif page == "송장 현황":
     st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
-    # 15초마다 자동 새로고침
-    refresh_count = st_autorefresh(interval=15000, limit=None, key="invoice_autorefresh")
+    # 30초마다 자동 새로고침 (Rate Limit 방지)
+    refresh_count = st_autorefresh(interval=30000, limit=None, key="invoice_autorefresh")
 
     vendors_info = load_vendors()
     sheet_client = get_sheet_client()
@@ -1062,10 +1076,15 @@ elif page == "송장 현황":
         if st.button("새로고침"):
             st.session_state['_sheet_cache_time'] = 0
     with col_status:
-        st.caption(f"자동 새로고침 (15초)  |  {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and vendors_info:
-        all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
+        with st.spinner("업체 시트 데이터 수집 중..."):
+            all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
+
+        _fetch_fails = st.session_state.get('_sheet_fetch_fails', 0)
+        if _fetch_fails > 0:
+            st.info(f"일부 업체({_fetch_fails}개) 시트를 불러오지 못했습니다. 잠시 후 자동으로 다시 시도합니다.")
 
         total_orders = 0
         total_invoices = 0
