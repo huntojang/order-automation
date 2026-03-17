@@ -390,29 +390,14 @@ def load_vendors():
     return config.load_vendors()
 
 
-def fetch_all_vendor_sheets(_client, vendors, active_only=True):
-    """업체 시트 데이터 가져오기 (주문 있는 업체만, 캐시 60초)"""
+def fetch_all_vendor_sheets(_client, vendors):
+    """업체 시트 데이터 가져오기 (전체, 캐시 60초)"""
     now = time.time()
     cache = st.session_state.get('_sheet_cache', {})
     cache_time = st.session_state.get('_sheet_cache_time', 0)
 
-    if cache and (now - cache_time) < 30:
+    if cache and (now - cache_time) < 60:
         return cache
-
-    # 주문 업로드된 업체만 읽기 (API 호출 대폭 절감)
-    uploaded = st.session_state.get('_upload_results', {})
-    if active_only and uploaded:
-        active_vendors = set(uploaded.keys())
-    elif active_only:
-        # session_state 비어있으면 (앱 재배포 등) 최근 업로드 로그에서 복원
-        history = load_upload_history()
-        if history:
-            latest = history[0]
-            active_vendors = set(v['name'] for v in latest.get('vendors', []))
-        else:
-            active_vendors = None
-    else:
-        active_vendors = None
 
     result = {}
     fail_count = 0
@@ -423,9 +408,6 @@ def fetch_all_vendor_sheets(_client, vendors, active_only=True):
         name = v['name']
         url = v.get('google_sheet_url', '')
         if not url:
-            continue
-        # 주문 없는 업체는 건너뛰기
-        if active_vendors and name not in active_vendors:
             continue
         try:
             data = _client.read_sheet(url)
@@ -438,9 +420,9 @@ def fetch_all_vendor_sheets(_client, vendors, active_only=True):
             fail_count += 1
             result[name] = None
         read_count += 1
-        # 20개 넘으면 2초 쉬기
-        if read_count > 0 and read_count % 20 == 0:
-            time.sleep(2)
+        # 15개마다 3초 대기 (API 60 req/min 제한 대응)
+        if read_count > 0 and read_count % 15 == 0:
+            time.sleep(3)
 
     st.session_state['_sheet_cache'] = result
     st.session_state['_sheet_cache_time'] = now
@@ -1099,8 +1081,8 @@ if page == "발주 업로드":
 elif page == "송장 현황":
     st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
-    # 30초마다 자동 새로고침 (Rate Limit 방지)
-    refresh_count = st_autorefresh(interval=30000, limit=None, key="invoice_autorefresh")
+    # 60초마다 자동 새로고침 (API 60 req/min 제한 대응)
+    refresh_count = st_autorefresh(interval=60000, limit=None, key="invoice_autorefresh")
 
     vendors_info = load_vendors()
     sheet_client = get_sheet_client()
@@ -1110,7 +1092,7 @@ elif page == "송장 현황":
         if st.button("새로고침"):
             st.session_state['_sheet_cache_time'] = 0
     with col_status:
-        st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 새로고침 (60초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and vendors_info:
         with st.spinner("업체 시트 데이터 수집 중..."):
@@ -1285,14 +1267,7 @@ elif page == "송장 다운로드":
 
             all_invoices = []
 
-            # 주문 업로드된 업체만 수집 (API 호출 절감)
-            uploaded = st.session_state.get('_upload_results', {})
-            if uploaded:
-                active_names = set(uploaded.keys())
-            else:
-                history = load_upload_history()
-                active_names = set(v['name'] for v in history[0].get('vendors', [])) if history else None
-            target_vendors = [v for v in vendors_info if v['name'] in active_names] if active_names else vendors_info
+            target_vendors = vendors_info
 
             for idx, vendor_info in enumerate(target_vendors):
                 vendor_name = vendor_info['name']
