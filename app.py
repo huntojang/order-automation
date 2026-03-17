@@ -847,6 +847,14 @@ if page == "발주 업로드":
         if vendor_data:
             _upload_results = st.session_state.get('_upload_results', {})
             _alimtalk_results = st.session_state.get('_alimtalk_results', {})
+            # session_state 비어있으면 최근 업로드 기록에서 복원
+            if not _upload_results:
+                _history = load_upload_history()
+                if _history:
+                    _latest = _history[0]
+                    for _v in _latest.get('vendors', []):
+                        _upload_results[_v['name']] = _v.get('sheet_uploaded', False)
+                        _alimtalk_results[_v['name']] = _v.get('alimtalk_sent', False)
             with st.expander(f"공급처별 주문 현황 ({len(vendor_data)}개 업체)", expanded=False):
                 grid_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;">'
                 for name, vdf in vendor_data.items():
