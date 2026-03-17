@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Dict, List, Any
 
@@ -138,10 +139,23 @@ class GoogleSheetClient:
             logging.error(f'❌ 구글 시트 인증 실패: {e}')
             raise
 
+    def _retry_on_quota(self, fn, max_retries=3):
+        """429 Rate Limit 에러 시 자동 재시도 (exponential backoff)"""
+        for attempt in range(max_retries + 1):
+            try:
+                return fn()
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 429 and attempt < max_retries:
+                    wait = 2 ** attempt * 10  # 10s, 20s, 40s
+                    logging.warning(f'⏳ API 할당량 초과, {wait}초 후 재시도 ({attempt + 1}/{max_retries})')
+                    time.sleep(wait)
+                else:
+                    raise
+
     def open_sheet_by_url(self, url: str):
         """URL로 시트 열기"""
         try:
-            return self.client.open_by_url(url)
+            return self._retry_on_quota(lambda: self.client.open_by_url(url))
         except Exception as e:
             logging.error(f'❌ 시트 열기 실패 ({url}): {e}')
             return None
@@ -166,36 +180,43 @@ class GoogleSheetClient:
 
             worksheet = spreadsheet.get_worksheet(worksheet_index)
 
-            # 기존 데이터 클리어
-            worksheet.clear()
-
-            # 새 데이터 삽입
+            # 기존 데이터 클리어 + 새 데이터 삽입
+            self._retry_on_quota(lambda: worksheet.clear())
             if data:
-                worksheet.update('A1', data)
+                self._retry_on_quota(lambda: worksheet.update('A1', data))
 
-            # 헤더 행 서식 적용 (굵게, 배경색)
+            # batch_format으로 서식을 한 번의 API 호출로 처리
+            format_requests = []
+
+            # 헤더 행 서식 (굵게, 배경색)
             if len(data) > 0:
                 num_cols = len(data[0])
                 last_col_letter = chr(ord('A') + num_cols - 1) if num_cols <= 26 else 'Z'
-                worksheet.format(f'A1:{last_col_letter}1', {
-                    'textFormat': {'bold': True},
-                    'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
+                format_requests.append({
+                    'range': f'A1:{last_col_letter}1',
+                    'format': {
+                        'textFormat': {'bold': True},
+                        'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
+                    }
                 })
 
-            # 송장번호/택배사 칸 노란색 강조 (헤더에서 위치 동적 탐색)
+            # 송장번호/택배사 칸 노란색 강조
             if len(data) > 1:
                 last_row = len(data)
                 headers = data[0]
-                highlight_indices = []
                 for keyword in ['택배사', '송장번호']:
                     if keyword in headers:
-                        highlight_indices.append(headers.index(keyword))
-                if highlight_indices:
-                    for ci in highlight_indices:
+                        ci = headers.index(keyword)
                         col_letter = chr(ord('A') + ci) if ci < 26 else 'Z'
-                        worksheet.format(f'{col_letter}2:{col_letter}{last_row}', {
-                            'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
+                        format_requests.append({
+                            'range': f'{col_letter}2:{col_letter}{last_row}',
+                            'format': {
+                                'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
+                            }
                         })
+
+            if format_requests:
+                self._retry_on_quota(lambda: worksheet.batch_format(format_requests))
 
             logging.info(f'✅ 시트 업데이트 완료: {spreadsheet.title}')
             return True
@@ -240,7 +261,7 @@ class GoogleSheetClient:
                 return []
 
             worksheet = spreadsheet.get_worksheet(worksheet_index)
-            return worksheet.get_all_values()
+            return self._retry_on_quota(lambda: worksheet.get_all_values())
 
         except Exception as e:
             logging.error(f'❌ 시트 읽기 실패: {e}')

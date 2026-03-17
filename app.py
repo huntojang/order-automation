@@ -403,7 +403,7 @@ def fetch_all_vendor_sheets(_client, vendors):
     result = {}
     if not _client or not vendors:
         return result
-    for v in vendors:
+    for i, v in enumerate(vendors):
         url = v.get('google_sheet_url', '')
         if not url:
             continue
@@ -412,6 +412,8 @@ def fetch_all_vendor_sheets(_client, vendors):
             result[v['name']] = data
         except Exception:
             result[v['name']] = None
+        if i > 0 and i % 10 == 0:
+            time.sleep(2)
 
     st.session_state['_sheet_cache'] = result
     st.session_state['_sheet_cache_time'] = now
@@ -883,7 +885,7 @@ if page == "발주 업로드":
                         with status_container:
                             st.warning(f"{vendor_name} — 시트 URL 없음")
 
-                    time.sleep(0.3)
+                    time.sleep(1.5)
 
                 progress.progress(1.0, text="시트 업로드 완료!")
 
@@ -1254,6 +1256,9 @@ elif page == "송장 다운로드":
                     st.success(f"{vendor_name} — {len(df_with_invoice)}건 수집")
                 else:
                     st.info(f"{vendor_name} — 입력된 송장 없음")
+
+                if idx > 0 and idx % 10 == 0:
+                    time.sleep(2)
 
             progress.progress(1.0, text="수집 완료!")
 
