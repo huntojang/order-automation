@@ -872,15 +872,18 @@ if page == "발주 업로드":
                     # 구글 시트 업로드
                     sheet_url = vendor_info.get('google_sheet_url', '')
                     if sheet_url:
-                        result = sheet_client.update_sheet(sheet_url, sheet_data)
-                        if result is True:
+                        try:
+                            result = sheet_client.update_sheet(sheet_url, sheet_data)
+                            if result is True:
+                                with status_container:
+                                    st.success(f"{vendor_name} — {len(vendor_df)}건 업로드 완료")
+                                success_count += 1
+                            else:
+                                with status_container:
+                                    st.error(f"{vendor_name} — 업로드 실패: {result}")
+                        except Exception as e:
                             with status_container:
-                                st.success(f"{vendor_name} — {len(vendor_df)}건 업로드 완료")
-                            success_count += 1
-                        else:
-                            err_msg = result if isinstance(result, str) else "알 수 없는 오류"
-                            with status_container:
-                                st.error(f"{vendor_name} — 업로드 실패: {err_msg}")
+                                st.error(f"{vendor_name} — 업로드 오류: {e}")
                     else:
                         with status_container:
                             st.warning(f"{vendor_name} — 시트 URL 없음")

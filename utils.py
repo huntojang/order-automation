@@ -139,14 +139,14 @@ class GoogleSheetClient:
             logging.error(f'❌ 구글 시트 인증 실패: {e}')
             raise
 
-    def _retry_on_quota(self, fn, max_retries=3):
+    def _retry_on_quota(self, fn, max_retries=5):
         """429 Rate Limit 에러 시 자동 재시도 (exponential backoff)"""
         for attempt in range(max_retries + 1):
             try:
                 return fn()
             except gspread.exceptions.APIError as e:
                 if e.response.status_code == 429 and attempt < max_retries:
-                    wait = 2 ** attempt * 10  # 10s, 20s, 40s
+                    wait = (attempt + 1) * 15  # 15s, 30s, 45s, 60s, 75s
                     logging.warning(f'⏳ API 할당량 초과, {wait}초 후 재시도 ({attempt + 1}/{max_retries})')
                     time.sleep(wait)
                 else:
