@@ -405,6 +405,9 @@ def fetch_all_vendor_sheets(_client, vendors):
         history = load_upload_history()
         if history:
             active_names = set(v['name'] for v in history[0].get('vendors', []))
+    # 발주 기록 없으면 읽지 않음 (49개 전체 스캔 방지)
+    if not active_names:
+        return {}
 
     result = {}
     fail_count = 0
@@ -412,7 +415,7 @@ def fetch_all_vendor_sheets(_client, vendors):
     if not _client or not vendors:
         return result
     readable = [v for v in vendors if v.get('google_sheet_url', '') and
-                (not active_names or v['name'] in active_names)]
+                v['name'] in active_names]
     total = len(readable)
     if total == 0:
         return result
@@ -1116,6 +1119,9 @@ elif page == "송장 현황":
 
     if sheet_client and vendors_info:
         all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
+
+        if not all_sheets:
+            st.info("발주 업로드 후 송장 현황이 표시됩니다. 먼저 발주를 실행해주세요.")
 
         _fetch_fails = st.session_state.get('_sheet_fetch_fails', 0)
         if _fetch_fails > 0:
