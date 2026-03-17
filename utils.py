@@ -152,10 +152,12 @@ class GoogleSheetClient:
                 else:
                     raise
 
-    def open_sheet_by_url(self, url: str):
+    def open_sheet_by_url(self, url: str, retry=True):
         """URL로 시트 열기"""
         try:
-            return self._retry_on_quota(lambda: self.client.open_by_url(url))
+            if retry:
+                return self._retry_on_quota(lambda: self.client.open_by_url(url))
+            return self.client.open_by_url(url)
         except Exception as e:
             logging.error(f'❌ 시트 열기 실패 ({url}): {e}')
             return None
@@ -248,12 +250,12 @@ class GoogleSheetClient:
             시트 데이터 (2차원 리스트)
         """
         try:
-            spreadsheet = self.open_sheet_by_url(sheet_url)
+            spreadsheet = self.open_sheet_by_url(sheet_url, retry=False)
             if not spreadsheet:
                 return []
 
             worksheet = spreadsheet.get_worksheet(worksheet_index)
-            return self._retry_on_quota(lambda: worksheet.get_all_values())
+            return worksheet.get_all_values()
 
         except Exception as e:
             logging.error(f'❌ 시트 읽기 실패: {e}')
