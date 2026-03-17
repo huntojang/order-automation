@@ -883,6 +883,94 @@ if page == "발주 업로드":
                 grid_html += '</div>'
                 st.markdown(grid_html, unsafe_allow_html=True)
 
+        # 실패 항목 재시도 섹션
+        if _upload_results:
+            _failed_uploads = [n for n, ok in _upload_results.items() if ok is False or (ok is not True and ok is not None)]
+            _failed_alimtalk = [n for n, ok in _alimtalk_results.items() if ok is False]
+            # 전화번호 없는 업체는 톡 실패에서 제외 (재시도 불가)
+            _vendors_with_phone = set()
+            _retry_vendors_info = load_vendors()
+            for _vi in _retry_vendors_info:
+                if _vi.get('phone', '').strip():
+                    _vendors_with_phone.add(_vi['name'])
+            _failed_alimtalk = [n for n in _failed_alimtalk if n in _vendors_with_phone]
+
+            if _failed_uploads or _failed_alimtalk:
+                with st.expander(f"실패 항목 재시도 ({len(_failed_uploads) + len(_failed_alimtalk)}건)", expanded=True):
+                    # 전체 재시도 버튼
+                    col_retry_all_up, col_retry_all_al = st.columns(2)
+                    if _failed_uploads:
+                        with col_retry_all_up:
+                            if st.button(f"업로드 실패 전체 재시도 ({len(_failed_uploads)}건)", key="retry_all_uploads"):
+                                _r_client = get_sheet_client()
+                                _r_progress = st.progress(0)
+                                for _ri, _rn in enumerate(_failed_uploads):
+                                    _r_progress.progress((_ri + 1) / len(_failed_uploads), text=f"재시도: {_rn}")
+                                    if _rn in vendor_data:
+                                        _r_vinfo = next((v for v in _retry_vendors_info if v['name'] == _rn), None)
+                                        if _r_vinfo and _r_vinfo.get('google_sheet_url'):
+                                            _r_data = prepare_sheet_data(vendor_data[_rn])
+                                            _r_result = _r_client.update_sheet(_r_vinfo['google_sheet_url'], _r_data)
+                                            if _r_result is True:
+                                                _upload_results[_rn] = True
+                                                st.success(f"{_rn} 업로드 성공")
+                                            else:
+                                                st.error(f"{_rn} 업로드 실패: {_r_result}")
+                                    time.sleep(1)
+                                _r_progress.empty()
+                                st.session_state['_upload_results'] = _upload_results
+                                st.rerun()
+                    if _failed_alimtalk:
+                        with col_retry_all_al:
+                            if st.button(f"톡발송 실패 전체 재시도 ({len(_failed_alimtalk)}건)", key="retry_all_alimtalk"):
+                                _al_config = Config().load_alimtalk_config()
+                                for _rn in _failed_alimtalk:
+                                    _r_vinfo = next((v for v in _retry_vendors_info if v['name'] == _rn), None)
+                                    if _r_vinfo and _al_config and _rn in vendor_data:
+                                        _sent = send_alimtalk(_r_vinfo, len(vendor_data[_rn]), _al_config)
+                                        _alimtalk_results[_rn] = _sent
+                                        if _sent:
+                                            st.success(f"{_rn} 톡발송 성공")
+                                        else:
+                                            st.error(f"{_rn} 톡발송 실패")
+                                    time.sleep(0.3)
+                                st.session_state['_alimtalk_results'] = _alimtalk_results
+                                st.rerun()
+
+                    # 개별 재시도 버튼
+                    st.markdown("---")
+                    for _fn in sorted(set(_failed_uploads + _failed_alimtalk)):
+                        _fc1, _fc2, _fc3 = st.columns([3, 1, 1])
+                        with _fc1:
+                            st.markdown(f"**{_fn}**")
+                        with _fc2:
+                            if _fn in _failed_uploads:
+                                if st.button("업로드", key=f"retry_up_{_fn}"):
+                                    _r_client = get_sheet_client()
+                                    _r_vinfo = next((v for v in _retry_vendors_info if v['name'] == _fn), None)
+                                    if _r_vinfo and _r_vinfo.get('google_sheet_url') and _fn in vendor_data:
+                                        _r_data = prepare_sheet_data(vendor_data[_fn])
+                                        _r_result = _r_client.update_sheet(_r_vinfo['google_sheet_url'], _r_data)
+                                        if _r_result is True:
+                                            _upload_results[_fn] = True
+                                            st.session_state['_upload_results'] = _upload_results
+                                            st.rerun()
+                                        else:
+                                            st.error(f"실패: {_r_result}")
+                        with _fc3:
+                            if _fn in _failed_alimtalk:
+                                if st.button("톡발송", key=f"retry_al_{_fn}"):
+                                    _al_config = Config().load_alimtalk_config()
+                                    _r_vinfo = next((v for v in _retry_vendors_info if v['name'] == _fn), None)
+                                    if _r_vinfo and _al_config and _fn in vendor_data:
+                                        _sent = send_alimtalk(_r_vinfo, len(vendor_data[_fn]), _al_config)
+                                        _alimtalk_results[_fn] = _sent
+                                        st.session_state['_alimtalk_results'] = _alimtalk_results
+                                        if _sent:
+                                            st.rerun()
+                                        else:
+                                            st.error("톡발송 실패")
+
         # 발주 성공 결과 표시 (rerun 후)
         _last_success = st.session_state.pop('_last_success', None)
         if _last_success:
