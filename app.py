@@ -401,7 +401,18 @@ def fetch_all_vendor_sheets(_client, vendors, active_only=True):
 
     # 주문 업로드된 업체만 읽기 (API 호출 대폭 절감)
     uploaded = st.session_state.get('_upload_results', {})
-    active_vendors = set(uploaded.keys()) if (active_only and uploaded) else None
+    if active_only and uploaded:
+        active_vendors = set(uploaded.keys())
+    elif active_only:
+        # session_state 비어있으면 (앱 재배포 등) 최근 업로드 로그에서 복원
+        history = load_upload_history()
+        if history:
+            latest = history[0]
+            active_vendors = set(v['name'] for v in latest.get('vendors', []))
+        else:
+            active_vendors = None
+    else:
+        active_vendors = None
 
     result = {}
     fail_count = 0
@@ -1276,7 +1287,12 @@ elif page == "송장 다운로드":
 
             # 주문 업로드된 업체만 수집 (API 호출 절감)
             uploaded = st.session_state.get('_upload_results', {})
-            target_vendors = [v for v in vendors_info if v['name'] in uploaded] if uploaded else vendors_info
+            if uploaded:
+                active_names = set(uploaded.keys())
+            else:
+                history = load_upload_history()
+                active_names = set(v['name'] for v in history[0].get('vendors', [])) if history else None
+            target_vendors = [v for v in vendors_info if v['name'] in active_names] if active_names else vendors_info
 
             for idx, vendor_info in enumerate(target_vendors):
                 vendor_name = vendor_info['name']
