@@ -876,6 +876,34 @@ if page == "발주 업로드":
                 grid_html += '</div>'
                 st.markdown(grid_html, unsafe_allow_html=True)
 
+        # 발주 성공 결과 표시 (rerun 후)
+        _last_success = st.session_state.pop('_last_success', None)
+        if _last_success:
+            _success_b64 = _load_b64("assets/success.png")
+            st.markdown(f"""
+            <div style="
+                display:flex; justify-content:center; align-items:center;
+                padding:2rem 0; animation: successPop 0.6s ease-out;
+            ">
+                <img src="data:image/png;base64,{_success_b64}"
+                     style="width:260px; filter:drop-shadow(0 4px 20px rgba(64,144,195,0.3));" />
+            </div>
+            <style>
+                @keyframes successPop {{
+                    0% {{ opacity:0; transform:scale(0.5); }}
+                    60% {{ opacity:1; transform:scale(1.05); }}
+                    100% {{ opacity:1; transform:scale(1); }}
+                }}
+            </style>
+            """, unsafe_allow_html=True)
+            sc = _last_success['success_count']
+            ac = _last_success['alimtalk_sent']
+            to = _last_success['total_orders']
+            if ac > 0:
+                st.success(f"발주 처리 완료! {sc}개 업체 시트 업로드 + {ac}개 업체 알림톡 발송 완료")
+            else:
+                st.success(f"발주 처리 완료! {sc}개 업체에 총 {to}건 시트 업로드 완료 (알림톡 미설정)")
+
         # 발주 실행 버튼
         if st.button("발주 실행", type="primary", use_container_width=True):
             vendors_info = load_vendors()
@@ -978,29 +1006,14 @@ if page == "발주 업로드":
                     })
                 save_upload_log(log_entry)
 
-                # 성공 이펙트 (커스텀 로고 애니메이션)
-                _success_b64 = _load_b64("assets/success.png")
-                st.markdown(f"""
-                <div style="
-                    display:flex; justify-content:center; align-items:center;
-                    padding:2rem 0; animation: successPop 0.6s ease-out;
-                ">
-                    <img src="data:image/png;base64,{_success_b64}"
-                         style="width:260px; filter:drop-shadow(0 4px 20px rgba(64,144,195,0.3));" />
-                </div>
-                <style>
-                    @keyframes successPop {{
-                        0% {{ opacity:0; transform:scale(0.5); }}
-                        60% {{ opacity:1; transform:scale(1.05); }}
-                        100% {{ opacity:1; transform:scale(1); }}
-                    }}
-                </style>
-                """, unsafe_allow_html=True)
+                # 성공 결과 저장 후 rerun (카드 뱃지 표시를 위해)
                 alimtalk_sent_count = sum(1 for _al in _alimtalk_logs if _al.get('sent'))
-                if alimtalk_sent_count > 0:
-                    st.success(f"발주 처리 완료! {success_count}개 업체 시트 업로드 + {alimtalk_sent_count}개 업체 알림톡 발송 완료")
-                else:
-                    st.success(f"발주 처리 완료! {success_count}개 업체에 총 {len(merged_df)}건 시트 업로드 완료 (알림톡 미설정)")
+                st.session_state['_last_success'] = {
+                    'success_count': success_count,
+                    'total_orders': len(merged_df),
+                    'alimtalk_sent': alimtalk_sent_count,
+                }
+                st.rerun()
 
         # 알림톡 발송 내역 (메시지 미리보기만 유지)
         if st.session_state.get('alimtalk_logs'):
