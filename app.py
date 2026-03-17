@@ -945,7 +945,7 @@ if page == "발주 업로드":
                         with status_container:
                             st.warning(f"{vendor_name} — 시트 URL 없음")
 
-                    time.sleep(0.5)
+                    time.sleep(1)
 
                 progress.progress(1.0, text="시트 업로드 완료!")
 

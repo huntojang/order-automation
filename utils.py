@@ -154,10 +154,10 @@ class GoogleSheetClient:
                 else:
                     raise
 
-    def open_sheet_by_url(self, url: str, retry=True, use_cache=False):
-        """URL로 시트 열기 (use_cache=True면 캐시된 객체 재사용, API 호출 절감)"""
+    def open_sheet_by_url(self, url: str, retry=True):
+        """URL로 시트 열기 (항상 캐시 — spreadsheet 객체는 핸들이라 캐시해도 안전)"""
         try:
-            if use_cache and url in self._spreadsheet_cache:
+            if url in self._spreadsheet_cache:
                 return self._spreadsheet_cache[url]
             if retry:
                 ss = self._retry_on_quota(lambda: self.client.open_by_url(url))
@@ -172,7 +172,8 @@ class GoogleSheetClient:
     def update_sheet(self, sheet_url: str, data: List[List[Any]],
                      worksheet_index: int = 0):
         """
-        시트 데이터 업데이트 (API 호출 최소화: clear 생략, 빈 행 패딩)
+        시트 데이터 업데이트 (API 1회: 빈 행 패딩으로 덮어쓰기)
+        서식은 Apps Script에서 시트 생성 시 설정되므로 여기서는 값만 업데이트.
 
         Returns:
             성공 시 True, 실패 시 에러 메시지 문자열
@@ -184,40 +185,12 @@ class GoogleSheetClient:
 
             worksheet = spreadsheet.get_worksheet(worksheet_index)
 
-            # clear() 호출 생략 — 빈 행 패딩으로 이전 데이터 덮어쓰기
+            # 빈 행 패딩으로 이전 데이터 덮어쓰기 (clear 불필요)
             if data:
                 num_cols = len(data[0])
                 MAX_ROWS = max(len(data) + 10, 100)
                 padded = data + [[''] * num_cols] * (MAX_ROWS - len(data))
                 self._retry_on_quota(lambda: worksheet.update('A1', padded))
-
-            # batch_format: 헤더 + 송장칸 서식을 1번의 API 호출로
-            format_requests = []
-            if len(data) > 0:
-                num_cols = len(data[0])
-                last_col_letter = chr(ord('A') + num_cols - 1) if num_cols <= 26 else 'Z'
-                format_requests.append({
-                    'range': f'A1:{last_col_letter}1',
-                    'format': {
-                        'textFormat': {'bold': True},
-                        'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
-                    }
-                })
-            if len(data) > 1:
-                last_row = len(data)
-                headers = data[0]
-                for keyword in ['택배사', '송장번호']:
-                    if keyword in headers:
-                        ci = headers.index(keyword)
-                        col_letter = chr(ord('A') + ci) if ci < 26 else 'Z'
-                        format_requests.append({
-                            'range': f'{col_letter}2:{col_letter}{last_row}',
-                            'format': {
-                                'backgroundColor': {'red': 1.0, 'green': 1.0, 'blue': 0.8}
-                            }
-                        })
-            if format_requests:
-                self._retry_on_quota(lambda: worksheet.batch_format(format_requests))
 
             logging.info(f'✅ 시트 업데이트 완료: {spreadsheet.title}')
             return True
@@ -257,7 +230,7 @@ class GoogleSheetClient:
             시트 데이터 (2차원 리스트)
         """
         try:
-            spreadsheet = self.open_sheet_by_url(sheet_url, retry=False, use_cache=True)
+            spreadsheet = self.open_sheet_by_url(sheet_url, retry=False)
             if not spreadsheet:
                 return []
 
