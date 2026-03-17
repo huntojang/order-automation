@@ -5,6 +5,7 @@ import os
 import json
 import time
 import base64
+import logging
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -390,59 +391,59 @@ def load_vendors():
     return config.load_vendors()
 
 
-def fetch_all_vendor_sheets(_client, vendors):
-    """업체 시트 데이터 가져오기 (발주 보낸 업체만, 캐시 60초)"""
+def fetch_dashboard(_client, master_url):
+    """대시보드 탭에서 송장 현황 가져오기 (API 1회, 캐시 30초)
+    Apps Script가 5분마다 갱신하는 대시보드 데이터를 읽음.
+    """
     now = time.time()
-    cache = st.session_state.get('_sheet_cache', {})
-    cache_time = st.session_state.get('_sheet_cache_time', 0)
+    cache = st.session_state.get('_dashboard_cache', {})
+    cache_time = st.session_state.get('_dashboard_cache_time', 0)
 
-    if cache and (now - cache_time) < 60:
+    if cache and (now - cache_time) < 30:
         return cache
 
-    # 발주 보낸 업체만 읽기 (session_state → upload_history fallback)
-    active_names = set(st.session_state.get('_upload_results', {}).keys())
-    if not active_names:
-        history = load_upload_history()
-        if history:
-            active_names = set(v['name'] for v in history[0].get('vendors', []))
-    # 발주 기록 없으면 읽지 않음 (49개 전체 스캔 방지)
-    if not active_names:
+    if not _client or not master_url:
         return {}
 
-    result = {}
-    fail_count = 0
-    read_count = 0
-    if not _client or not vendors:
-        return result
-    readable = [v for v in vendors if v.get('google_sheet_url', '') and
-                v['name'] in active_names]
-    total = len(readable)
-    if total == 0:
-        return result
-    progress_bar = st.progress(0, text="업체 시트 수집 중...")
-    for v in readable:
-        name = v['name']
-        url = v['google_sheet_url']
+    try:
+        spreadsheet = _client.open_sheet_by_url(master_url)
+        if not spreadsheet:
+            return {}
         try:
-            data = _client.read_sheet(url)
-            if data:
-                result[name] = data
-            else:
-                fail_count += 1
-                result[name] = None
+            worksheet = spreadsheet.worksheet('대시보드')
         except Exception:
-            fail_count += 1
-            result[name] = None
-        read_count += 1
-        progress_bar.progress(read_count / total, text=f"업체 시트 수집 중... ({read_count}/{total})")
-        # 1초 대기: API 60 req/min 제한 대응
-        time.sleep(1)
-    progress_bar.empty()
+            return {}
+        data = worksheet.get_all_values()
+        if not data or len(data) < 2:
+            return {}
 
-    st.session_state['_sheet_cache'] = result
-    st.session_state['_sheet_cache_time'] = now
-    st.session_state['_sheet_fetch_fails'] = fail_count
-    return result
+        headers = data[0]
+        result = {}
+        for row in data[1:]:
+            if len(row) < len(headers):
+                row += [''] * (len(headers) - len(row))
+            item = dict(zip(headers, row))
+            name = item.get('업체명', '')
+            if not name:
+                continue
+            total = int(item.get('전체주문', 0)) if str(item.get('전체주문', '')).lstrip('-').isdigit() else 0
+            invoiced = int(item.get('송장완료', 0)) if str(item.get('송장완료', '')).isdigit() else 0
+            if total < 0:
+                total = 0  # 읽기 실패한 업체
+            result[name] = {
+                'total': total,
+                'invoiced': invoiced,
+                'pending': max(0, total - invoiced),
+                'rate': int(item.get('완료율', 0)) if str(item.get('완료율', '')).isdigit() else 0,
+            }
+
+        st.session_state['_dashboard_cache'] = result
+        st.session_state['_dashboard_cache_time'] = now
+        return result
+
+    except Exception as e:
+        logging.error(f'❌ 대시보드 읽기 실패: {e}')
+        return {}
 
 
 def prepare_sheet_data(df):
@@ -788,38 +789,28 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (30초 간격) =====
-# 발주 업로드 / 송장 현황 페이지에서는 autorefresh 끔
 if page == "송장 다운로드":
     bg_refresh = st_autorefresh(interval=30000, limit=None, key="bg_autorefresh")
 
-    # 백그라운드 송장 체크 (캐시 활용, 에러 시 무시)
+    # 대시보드에서 변경 감지 (API 1회)
     try:
         _bg_client = get_sheet_client()
-        _bg_vendors = load_vendors()
-        _all_sheets = fetch_all_vendor_sheets(_bg_client, _bg_vendors or [])
-        if _all_sheets:
-            _bg_total_invoices = 0
-            _bg_vendor_status = {}
-            for _v in (_bg_vendors or []):
-                _data = _all_sheets.get(_v['name'])
-                if _data and len(_data) >= 2:
-                    _df = pd.DataFrame(_data[1:], columns=_data[0])
-                    _cnt = len(_df[_df.get('송장번호', pd.Series()).notna() & (_df.get('송장번호', pd.Series()) != '')])
-                    _bg_total_invoices += _cnt
-                    _bg_vendor_status[_v['name']] = _cnt
-
+        _bg_config = Config()
+        _bg_master_url = _bg_config.get_vendor_master_url()
+        _bg_dashboard = fetch_dashboard(_bg_client, _bg_master_url)
+        if _bg_dashboard:
+            _bg_total_invoices = sum(d['invoiced'] for d in _bg_dashboard.values())
             _prev = st.session_state.get('prev_invoice_count', None)
             _prev_vs = st.session_state.get('prev_vendor_status', {})
 
             if _prev is not None and _bg_total_invoices > _prev:
-                for _vn, _vc in _bg_vendor_status.items():
+                for _vn, _vd in _bg_dashboard.items():
                     _pc = _prev_vs.get(_vn, 0)
-                    if _vc > _pc:
-                        _diff = _vc - _pc
-                        st.toast(f"{_vn} 송장 +{_diff}건")
+                    if _vd['invoiced'] > _pc:
+                        st.toast(f"{_vn} 송장 +{_vd['invoiced'] - _pc}건")
 
             st.session_state['prev_invoice_count'] = _bg_total_invoices
-            st.session_state['prev_vendor_status'] = _bg_vendor_status
+            st.session_state['prev_vendor_status'] = {n: d['invoiced'] for n, d in _bg_dashboard.items()}
     except Exception:
         pass
 
@@ -1104,174 +1095,144 @@ if page == "발주 업로드":
 elif page == "송장 현황":
     st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
-    # 60초마다 자동 새로고침 (API 60 req/min 제한 대응)
-    refresh_count = st_autorefresh(interval=60000, limit=None, key="invoice_autorefresh")
+    # 30초마다 자동 새로고침 (대시보드 1회 읽기라 부담 없음)
+    refresh_count = st_autorefresh(interval=30000, limit=None, key="invoice_autorefresh")
 
-    vendors_info = load_vendors()
+    config = Config()
+    master_url = config.get_vendor_master_url()
     sheet_client = get_sheet_client()
+    vendors_info = load_vendors()
 
     col_refresh, col_status = st.columns([1, 3])
     with col_refresh:
         if st.button("새로고침"):
-            st.session_state['_sheet_cache_time'] = 0
+            st.session_state['_dashboard_cache_time'] = 0
     with col_status:
-        st.caption(f"자동 새로고침 (60초)  |  {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
-    if sheet_client and vendors_info:
-        all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
+    if sheet_client and master_url:
+        dashboard = fetch_dashboard(sheet_client, master_url)
 
-        if not all_sheets:
-            st.info("발주 업로드 후 송장 현황이 표시됩니다. 먼저 발주를 실행해주세요.")
-
-        _fetch_fails = st.session_state.get('_sheet_fetch_fails', 0)
-        if _fetch_fails > 0:
-            st.info(f"일부 업체({_fetch_fails}개) 시트를 불러오지 못했습니다. 잠시 후 자동으로 다시 시도합니다.")
-
-        total_orders = 0
-        total_invoices = 0
-        vendor_statuses = []
-
-        for vendor_info in vendors_info:
-            vendor_name = vendor_info['name']
-            sheet_url = vendor_info.get('google_sheet_url', '')
-            if not sheet_url:
-                continue
-
-            data = all_sheets.get(vendor_name)
-            if not data or len(data) < 2:
-                vendor_statuses.append({
-                    'name': vendor_name, 'total': 0, 'completed': 0, 'pending': 0, 'url': sheet_url
-                })
-                continue
-
-            df = pd.DataFrame(data[1:], columns=data[0])
-            order_count = len(df)
-            invoice_count = len(df[df.get('송장번호', pd.Series()).notna() & (df.get('송장번호', pd.Series()) != '')])
-            total_orders += order_count
-            total_invoices += invoice_count
-
-            vendor_statuses.append({
-                'name': vendor_name,
-                'total': order_count,
-                'completed': invoice_count,
-                'pending': order_count - invoice_count,
-                'url': sheet_url
-            })
-
-        # 변경 감지
-        prev_invoices = st.session_state.get('prev_invoice_count', None)
-        prev_vendor_status = st.session_state.get('prev_vendor_status', {})
-
-        if prev_invoices is not None and total_invoices > prev_invoices:
-            for vs in vendor_statuses:
-                prev_count = prev_vendor_status.get(vs['name'], 0)
-                if vs['completed'] > prev_count:
-                    diff = vs['completed'] - prev_count
-                    st.toast(f"{vs['name']} 송장 +{diff}건")
-
-        st.session_state['prev_invoice_count'] = total_invoices
-        st.session_state['prev_vendor_status'] = {vs['name']: vs['completed'] for vs in vendor_statuses}
-        st.session_state['invoice_count'] = total_invoices
-        st.session_state['pending_count'] = total_orders - total_invoices
-
-        # 전체 요약
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("전체 주문", f"{total_orders}건")
-        with col2:
-            st.metric("송장 입력 완료", f"{total_invoices}건",
-                       delta=f"+{total_invoices - prev_invoices}건" if prev_invoices is not None and total_invoices > prev_invoices else None)
-        with col3:
-            st.metric("미입력", f"{total_orders - total_invoices}건")
-
-        if total_orders > 0:
-            _pct = int(total_invoices / total_orders * 100)
-            st.markdown(f"""
-            <div style="margin:1rem 0;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;">
-                    <span style="color:#64748B;font-weight:500;">진행률</span>
-                    <span style="color:#0F172A;font-weight:600;">{total_invoices}/{total_orders} ({_pct}%)</span>
-                </div>
-                <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
-                    <div style="background:#2E643C;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
-                </div>
-            </div>""", unsafe_allow_html=True)
-
-        # 전체 업체 상세 현황
-        st.markdown("---")
-        st.markdown('<div class="section-title">업체별 상세</div>', unsafe_allow_html=True)
-
-        for vs in vendor_statuses:
-            prev_count = prev_vendor_status.get(vs['name'], 0)
-            is_new = vs['completed'] > prev_count
-            is_done = vs['completed'] == vs['total'] and vs['total'] > 0
-
-            new_badge = ' <span style="color:#2E643C;font-size:0.75rem;font-weight:600;">NEW</span>' if is_new else ""
-
-            if is_done:
-                status_badge = '<span style="background:#E8F5E9;color:#2E643C;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">완료</span>'
-                active_cls = "list-row-active"
-            elif vs['completed'] > 0:
-                status_badge = f'<span style="background:#FFF8E1;color:#B8860B;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">{vs["completed"]}/{vs["total"]}</span>'
-                active_cls = ""
-            elif vs['total'] > 0:
-                status_badge = '<span style="background:#F5F5F5;color:#999;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">대기</span>'
-                active_cls = ""
-            else:
-                status_badge = '<span style="background:#F5F5F5;color:#CCC;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">—</span>'
-                active_cls = ""
-
-            st.markdown(f"""
-            <div class="list-row {active_cls}">
-                <div style="flex:1;">
-                    <div class="list-name">{vs['name']}{new_badge}</div>
-                    <div class="list-desc">{vs['total']}건</div>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px;">
-                    {status_badge}
-                    <a href="{vs['url']}" target="_blank" style="text-decoration:none;">
-                        <div class="list-arrow">→</div>
-                    </a>
-                </div>
-            </div>""", unsafe_allow_html=True)
-
-        # 알림 로그
-        st.markdown("---")
-        st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
-
-        if 'notification_log' not in st.session_state:
-            st.session_state['notification_log'] = []
-
-        if prev_invoices is not None and total_invoices > prev_invoices:
-            for vs in vendor_statuses:
-                prev_count = prev_vendor_status.get(vs['name'], 0)
-                if vs['completed'] > prev_count:
-                    diff = vs['completed'] - prev_count
-                    st.session_state['notification_log'].insert(0, {
-                        'time': datetime.now().strftime('%H:%M:%S'),
-                        'vendor': vs['name'],
-                        'count': diff,
-                        'total': vs['completed']
-                    })
-
-        if st.session_state.get('notification_log'):
-            for log in st.session_state['notification_log'][:10]:
-                st.markdown(f"""
-                <div class="notification-bar">
-                    [{log['time']}] <strong>{log['vendor']}</strong> 송장 +{log['count']}건 (총 {log['total']}건)
-                </div>
-                """, unsafe_allow_html=True)
+        if not dashboard:
+            st.info("대시보드 데이터가 아직 없습니다. Apps Script에서 updateDashboard를 실행해주세요.")
         else:
-            if total_invoices > 0:
-                for vs in vendor_statuses:
-                    if vs['completed'] > 0:
-                        st.markdown(f"""
-                        <div class="notification-bar">
-                            {vs['name']} 송장 {vs['completed']}건 입력 완료
-                        </div>
-                        """, unsafe_allow_html=True)
+            # URL 매핑
+            vendor_urls = {v['name']: v.get('google_sheet_url', '') for v in vendors_info} if vendors_info else {}
+
+            total_orders = sum(d['total'] for d in dashboard.values())
+            total_invoices = sum(d['invoiced'] for d in dashboard.values())
+
+            # 변경 감지
+            prev_invoices = st.session_state.get('prev_invoice_count', None)
+            prev_vendor_status = st.session_state.get('prev_vendor_status', {})
+
+            if prev_invoices is not None and total_invoices > prev_invoices:
+                for name, d in dashboard.items():
+                    prev_count = prev_vendor_status.get(name, 0)
+                    if d['invoiced'] > prev_count:
+                        st.toast(f"{name} 송장 +{d['invoiced'] - prev_count}건")
+
+            st.session_state['prev_invoice_count'] = total_invoices
+            st.session_state['prev_vendor_status'] = {name: d['invoiced'] for name, d in dashboard.items()}
+
+            # 전체 요약
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("전체 주문", f"{total_orders}건")
+            with col2:
+                st.metric("송장 입력 완료", f"{total_invoices}건",
+                           delta=f"+{total_invoices - prev_invoices}건" if prev_invoices is not None and total_invoices > prev_invoices else None)
+            with col3:
+                st.metric("미입력", f"{total_orders - total_invoices}건")
+
+            if total_orders > 0:
+                _pct = int(total_invoices / total_orders * 100)
+                st.markdown(f"""
+                <div style="margin:1rem 0;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;">
+                        <span style="color:#64748B;font-weight:500;">진행률</span>
+                        <span style="color:#0F172A;font-weight:600;">{total_invoices}/{total_orders} ({_pct}%)</span>
+                    </div>
+                    <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
+                        <div style="background:#2E643C;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
+                    </div>
+                </div>""", unsafe_allow_html=True)
+
+            # 업체별 상세
+            st.markdown("---")
+            st.markdown('<div class="section-title">업체별 상세</div>', unsafe_allow_html=True)
+
+            for name, d in dashboard.items():
+                if d['total'] == 0:
+                    continue
+                prev_count = prev_vendor_status.get(name, 0)
+                is_new = d['invoiced'] > prev_count
+                is_done = d['invoiced'] == d['total'] and d['total'] > 0
+                url = vendor_urls.get(name, '')
+
+                new_badge = ' <span style="color:#2E643C;font-size:0.75rem;font-weight:600;">NEW</span>' if is_new else ""
+
+                if is_done:
+                    status_badge = '<span style="background:#E8F5E9;color:#2E643C;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">완료</span>'
+                    active_cls = "list-row-active"
+                elif d['invoiced'] > 0:
+                    status_badge = f'<span style="background:#FFF8E1;color:#B8860B;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">{d["invoiced"]}/{d["total"]}</span>'
+                    active_cls = ""
+                else:
+                    status_badge = '<span style="background:#F5F5F5;color:#999;padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:600;">대기</span>'
+                    active_cls = ""
+
+                st.markdown(f"""
+                <div class="list-row {active_cls}">
+                    <div style="flex:1;">
+                        <div class="list-name">{name}{new_badge}</div>
+                        <div class="list-desc">{d['total']}건</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        {status_badge}
+                        <a href="{url}" target="_blank" style="text-decoration:none;">
+                            <div class="list-arrow">→</div>
+                        </a>
+                    </div>
+                </div>""", unsafe_allow_html=True)
+
+            # 알림 로그
+            st.markdown("---")
+            st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
+
+            if 'notification_log' not in st.session_state:
+                st.session_state['notification_log'] = []
+
+            if prev_invoices is not None and total_invoices > prev_invoices:
+                for name, d in dashboard.items():
+                    prev_count = prev_vendor_status.get(name, 0)
+                    if d['invoiced'] > prev_count:
+                        diff = d['invoiced'] - prev_count
+                        st.session_state['notification_log'].insert(0, {
+                            'time': datetime.now().strftime('%H:%M:%S'),
+                            'vendor': name,
+                            'count': diff,
+                            'total': d['invoiced']
+                        })
+
+            if st.session_state.get('notification_log'):
+                for log in st.session_state['notification_log'][:10]:
+                    st.markdown(f"""
+                    <div class="notification-bar">
+                        [{log['time']}] <strong>{log['vendor']}</strong> 송장 +{log['count']}건 (총 {log['total']}건)
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
+                if total_invoices > 0:
+                    for name, d in dashboard.items():
+                        if d['invoiced'] > 0:
+                            st.markdown(f"""
+                            <div class="notification-bar">
+                                {name} 송장 {d['invoiced']}건 입력 완료
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
 
     else:
         st.warning("구글 시트 연결이 필요합니다")

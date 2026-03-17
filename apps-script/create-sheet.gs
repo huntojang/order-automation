@@ -90,6 +90,103 @@ function doGet(e) {
  * 공유폴더 내 모든 시트를 "링크가 있는 모든 사용자 - 편집자"로 공유 설정
  * Apps Script 에디터에서 이 함수를 직접 실행하세요 (1회만)
  */
+/**
+ * 송장 대시보드 자동 갱신
+ * 모든 업체 시트에서 주문수/송장수를 집계하여 마스터 시트의 "대시보드" 탭에 기록
+ *
+ * 설정 방법:
+ * 1. Apps Script 에디터에서 updateDashboard 를 한 번 수동 실행 (권한 승인)
+ * 2. 트리거 탭(시계 아이콘) → 트리거 추가
+ *    - 실행할 함수: updateDashboard
+ *    - 이벤트 소스: 시간 기반
+ *    - 시간 간격: 5분마다
+ */
+var MASTER_SHEET_ID = '18_cKCFmBvUjIqlmdyidgYZ226uk4SRWYh-Rv0rWovyc';
+
+function updateDashboard() {
+  var masterSS = SpreadsheetApp.openById(MASTER_SHEET_ID);
+  var vendorSheet = masterSS.getSheetByName('업체목록');
+  if (!vendorSheet) {
+    Logger.log('업체목록 시트를 찾을 수 없습니다');
+    return;
+  }
+
+  var vendorData = vendorSheet.getDataRange().getValues();
+  var headers_row = vendorData[0];
+
+  // 열 인덱스 찾기
+  var nameIdx = headers_row.indexOf('업체명');
+  var urlIdx = headers_row.indexOf('구글시트URL');
+  var statusIdx = headers_row.indexOf('상태');
+  if (nameIdx < 0 || urlIdx < 0) {
+    Logger.log('업체명/구글시트URL 열을 찾을 수 없습니다');
+    return;
+  }
+
+  // 대시보드 시트 생성 또는 가져오기
+  var dashboard = masterSS.getSheetByName('대시보드');
+  if (!dashboard) {
+    dashboard = masterSS.insertSheet('대시보드');
+  }
+
+  var dashHeaders = ['업체명', '전체주문', '송장완료', '미입력', '완료율', '최종갱신'];
+  var results = [dashHeaders];
+
+  for (var i = 1; i < vendorData.length; i++) {
+    var name = vendorData[i][nameIdx];
+    var url = vendorData[i][urlIdx];
+    var status = statusIdx >= 0 ? vendorData[i][statusIdx] : '';
+
+    if (!name || !url || status === '비활성') continue;
+
+    try {
+      var vendorSS = SpreadsheetApp.openByUrl(url);
+      var sheet = vendorSS.getSheets()[0];
+      var data = sheet.getDataRange().getValues();
+
+      var totalOrders = Math.max(0, data.length - 1);
+      var invoiced = 0;
+
+      // 송장번호 열 찾기
+      if (data.length > 0) {
+        var invoiceCol = data[0].indexOf('송장번호');
+        if (invoiceCol >= 0) {
+          for (var r = 1; r < data.length; r++) {
+            // 빈 행 스킵 (패딩된 빈 행 제외)
+            var hasData = false;
+            for (var c = 0; c < Math.min(data[r].length, 5); c++) {
+              if (data[r][c] && String(data[r][c]).trim() !== '') {
+                hasData = true;
+                break;
+              }
+            }
+            if (!hasData) {
+              totalOrders = r - 1;
+              break;
+            }
+            if (data[r][invoiceCol] && String(data[r][invoiceCol]).trim() !== '') {
+              invoiced++;
+            }
+          }
+        }
+      }
+
+      var pending = totalOrders - invoiced;
+      var rate = totalOrders > 0 ? Math.round(invoiced / totalOrders * 100) : 0;
+      results.push([name, totalOrders, invoiced, pending, rate, new Date()]);
+
+    } catch (e) {
+      Logger.log('읽기 실패: ' + name + ' - ' + e.toString());
+      results.push([name, -1, 0, 0, 0, new Date()]);
+    }
+  }
+
+  dashboard.clear();
+  dashboard.getRange(1, 1, results.length, dashHeaders.length).setValues(results);
+  Logger.log('대시보드 갱신 완료: ' + (results.length - 1) + '개 업체');
+}
+
+
 function shareAllSheets() {
   var folder = DriveApp.getFolderById(SHARED_FOLDER_ID);
   var files = folder.getFiles();
