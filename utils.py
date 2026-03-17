@@ -139,6 +139,8 @@ class GoogleSheetClient:
             logging.error(f'❌ 구글 시트 인증 실패: {e}')
             raise
 
+    _spreadsheet_cache = {}  # URL → spreadsheet 객체 캐시
+
     def _retry_on_quota(self, fn, max_retries=5):
         """429 Rate Limit 에러 시 자동 재시도 (exponential backoff)"""
         for attempt in range(max_retries + 1):
@@ -146,18 +148,23 @@ class GoogleSheetClient:
                 return fn()
             except gspread.exceptions.APIError as e:
                 if e.response.status_code == 429 and attempt < max_retries:
-                    wait = (attempt + 1) * 15  # 15s, 30s, 45s, 60s, 75s
+                    wait = (attempt + 1) * 15
                     logging.warning(f'⏳ API 할당량 초과, {wait}초 후 재시도 ({attempt + 1}/{max_retries})')
                     time.sleep(wait)
                 else:
                     raise
 
-    def open_sheet_by_url(self, url: str, retry=True):
-        """URL로 시트 열기"""
+    def open_sheet_by_url(self, url: str, retry=True, use_cache=False):
+        """URL로 시트 열기 (use_cache=True면 캐시된 객체 재사용, API 호출 절감)"""
         try:
+            if use_cache and url in self._spreadsheet_cache:
+                return self._spreadsheet_cache[url]
             if retry:
-                return self._retry_on_quota(lambda: self.client.open_by_url(url))
-            return self.client.open_by_url(url)
+                ss = self._retry_on_quota(lambda: self.client.open_by_url(url))
+            else:
+                ss = self.client.open_by_url(url)
+            self._spreadsheet_cache[url] = ss
+            return ss
         except Exception as e:
             logging.error(f'❌ 시트 열기 실패 ({url}): {e}')
             return None
@@ -250,7 +257,7 @@ class GoogleSheetClient:
             시트 데이터 (2차원 리스트)
         """
         try:
-            spreadsheet = self.open_sheet_by_url(sheet_url, retry=False)
+            spreadsheet = self.open_sheet_by_url(sheet_url, retry=False, use_cache=True)
             if not spreadsheet:
                 return []
 

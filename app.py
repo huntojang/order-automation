@@ -396,7 +396,7 @@ def fetch_all_vendor_sheets(_client, vendors, active_only=True):
     cache = st.session_state.get('_sheet_cache', {})
     cache_time = st.session_state.get('_sheet_cache_time', 0)
 
-    if cache and (now - cache_time) < 60:
+    if cache and (now - cache_time) < 30:
         return cache
 
     # 주문 업로드된 업체만 읽기 (API 호출 대폭 절감)
