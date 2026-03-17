@@ -391,7 +391,7 @@ def load_vendors():
 
 
 def fetch_all_vendor_sheets(_client, vendors):
-    """업체 시트 데이터 가져오기 (전체, 캐시 60초)"""
+    """업체 시트 데이터 가져오기 (발주 보낸 업체만, 캐시 60초)"""
     now = time.time()
     cache = st.session_state.get('_sheet_cache', {})
     cache_time = st.session_state.get('_sheet_cache_time', 0)
@@ -399,13 +399,23 @@ def fetch_all_vendor_sheets(_client, vendors):
     if cache and (now - cache_time) < 60:
         return cache
 
+    # 발주 보낸 업체만 읽기 (session_state → upload_history fallback)
+    active_names = set(st.session_state.get('_upload_results', {}).keys())
+    if not active_names:
+        history = load_upload_history()
+        if history:
+            active_names = set(v['name'] for v in history[0].get('vendors', []))
+
     result = {}
     fail_count = 0
     read_count = 0
     if not _client or not vendors:
         return result
-    readable = [v for v in vendors if v.get('google_sheet_url', '')]
+    readable = [v for v in vendors if v.get('google_sheet_url', '') and
+                (not active_names or v['name'] in active_names)]
     total = len(readable)
+    if total == 0:
+        return result
     progress_bar = st.progress(0, text="업체 시트 수집 중...")
     for v in readable:
         name = v['name']
@@ -422,7 +432,7 @@ def fetch_all_vendor_sheets(_client, vendors):
             result[name] = None
         read_count += 1
         progress_bar.progress(read_count / total, text=f"업체 시트 수집 중... ({read_count}/{total})")
-        # 1초 대기: 업체 수 무관하게 항상 60 req/min 이내
+        # 1초 대기: API 60 req/min 제한 대응
         time.sleep(1)
     progress_bar.empty()
 
@@ -1276,7 +1286,12 @@ elif page == "송장 다운로드":
 
             all_invoices = []
 
-            target_vendors = vendors_info
+            # 발주 보낸 업체만 수집
+            _active = set(st.session_state.get('_upload_results', {}).keys())
+            if not _active:
+                _hist = load_upload_history()
+                _active = set(v['name'] for v in _hist[0].get('vendors', [])) if _hist else None
+            target_vendors = [v for v in vendors_info if v['name'] in _active] if _active else vendors_info
 
             for idx, vendor_info in enumerate(target_vendors):
                 vendor_name = vendor_info['name']
