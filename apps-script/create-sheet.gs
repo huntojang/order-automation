@@ -59,6 +59,9 @@ function doPost(e) {
     // 서비스 계정에 편집 권한
     ss.addEditor(SERVICE_ACCOUNT_EMAIL);
 
+    // 링크가 있는 모든 사용자에게 편집 권한 (위탁업체 사장님이 접근 가능하도록)
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+
     var url = ss.getUrl();
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -81,4 +84,32 @@ function doGet(e) {
     status: 'ok',
     message: '발주도우미 시트 생성 API가 정상 작동 중입니다.'
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * 공유폴더 내 모든 시트를 "링크가 있는 모든 사용자 - 편집자"로 공유 설정
+ * Apps Script 에디터에서 이 함수를 직접 실행하세요 (1회만)
+ */
+function shareAllSheets() {
+  var folder = DriveApp.getFolderById(SHARED_FOLDER_ID);
+  var files = folder.getFiles();
+  var count = 0;
+  var errors = [];
+
+  while (files.hasNext()) {
+    var file = files.next();
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+      count++;
+      Logger.log('공유 완료: ' + file.getName());
+    } catch (err) {
+      errors.push(file.getName() + ': ' + err.toString());
+      Logger.log('공유 실패: ' + file.getName() + ' - ' + err.toString());
+    }
+  }
+
+  Logger.log('=== 완료: ' + count + '개 파일 공유 설정 ===');
+  if (errors.length > 0) {
+    Logger.log('실패: ' + errors.length + '개');
+  }
 }
