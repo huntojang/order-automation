@@ -404,11 +404,12 @@ def fetch_all_vendor_sheets(_client, vendors):
     read_count = 0
     if not _client or not vendors:
         return result
-    for v in vendors:
+    readable = [v for v in vendors if v.get('google_sheet_url', '')]
+    total = len(readable)
+    progress_bar = st.progress(0, text="업체 시트 수집 중...")
+    for v in readable:
         name = v['name']
-        url = v.get('google_sheet_url', '')
-        if not url:
-            continue
+        url = v['google_sheet_url']
         try:
             data = _client.read_sheet(url)
             if data:
@@ -420,9 +421,10 @@ def fetch_all_vendor_sheets(_client, vendors):
             fail_count += 1
             result[name] = None
         read_count += 1
-        # 15개마다 3초 대기 (API 60 req/min 제한 대응)
-        if read_count > 0 and read_count % 15 == 0:
-            time.sleep(3)
+        progress_bar.progress(read_count / total, text=f"업체 시트 수집 중... ({read_count}/{total})")
+        # 1초 대기: 업체 수 무관하게 항상 60 req/min 이내
+        time.sleep(1)
+    progress_bar.empty()
 
     st.session_state['_sheet_cache'] = result
     st.session_state['_sheet_cache_time'] = now
@@ -1095,8 +1097,7 @@ elif page == "송장 현황":
         st.caption(f"자동 새로고침 (60초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and vendors_info:
-        with st.spinner("업체 시트 데이터 수집 중..."):
-            all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
+        all_sheets = fetch_all_vendor_sheets(sheet_client, vendors_info)
 
         _fetch_fails = st.session_state.get('_sheet_fetch_fails', 0)
         if _fetch_fails > 0:
