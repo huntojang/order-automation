@@ -1253,12 +1253,18 @@ elif page == "송장 다운로드":
 
             all_invoices = []
 
-            # 발주 보낸 업체만 수집
-            _active = set(st.session_state.get('_upload_results', {}).keys())
-            if not _active:
-                _hist = load_upload_history()
-                _active = set(v['name'] for v in _hist[0].get('vendors', [])) if _hist else None
-            target_vendors = [v for v in vendors_info if v['name'] in _active] if _active else vendors_info
+            # 대시보드에서 송장 있는 업체만 수집 (API 최소화)
+            _dl_config = Config()
+            _dl_master_url = _dl_config.get_vendor_master_url()
+            _dl_dashboard = fetch_dashboard(sheet_client, _dl_master_url)
+            if _dl_dashboard:
+                _invoiced_names = set(n for n, d in _dl_dashboard.items() if d['invoiced'] > 0)
+            else:
+                _invoiced_names = None
+            target_vendors = [v for v in vendors_info if v['name'] in _invoiced_names] if _invoiced_names else []
+
+            if not target_vendors:
+                st.info("송장이 입력된 업체가 없습니다.")
 
             for idx, vendor_info in enumerate(target_vendors):
                 vendor_name = vendor_info['name']
@@ -1269,6 +1275,7 @@ elif page == "송장 다운로드":
                     continue
 
                 data = sheet_client.read_sheet(sheet_url)
+                time.sleep(1)  # API rate limit 대응
                 if not data or len(data) < 2:
                     continue
 
