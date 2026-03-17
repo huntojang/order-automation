@@ -860,14 +860,14 @@ if page == "발주 업로드":
                     if _upload_results:
                         up_ok = _upload_results.get(name)
                         if up_ok is True:
-                            badges_html += '<span style="background:#E8F5E9;color:#2E643C;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">시트</span> '
+                            badges_html += '<span style="background:#E8F5E9;color:#2E643C;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">업로드완료</span> '
                         elif up_ok is not None:
-                            badges_html += '<span style="background:#FFEBEE;color:#C62828;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">실패</span> '
+                            badges_html += '<span style="background:#FFEBEE;color:#C62828;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">업로드실패</span> '
                         al_ok = _alimtalk_results.get(name)
                         if al_ok is True:
-                            badges_html += '<span style="background:#E3F2FD;color:#1565C0;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">알림톡</span>'
+                            badges_html += '<span style="background:#E8F5E9;color:#2E643C;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">톡발송완료</span>'
                         elif al_ok is False:
-                            badges_html += '<span style="background:#FFF3E0;color:#E65100;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">미발송</span>'
+                            badges_html += '<span style="background:#FFEBEE;color:#C62828;padding:1px 6px;border-radius:8px;font-size:0.6rem;font-weight:600;">톡발송실패</span>'
                     grid_html += f'''<div style="background:#F5F5F5;border-radius:10px;padding:10px 12px;text-align:center;">
                         <div style="font-size:0.78rem;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{name}">{name}</div>
                         <div style="font-size:1.2rem;font-weight:700;color:#1A1A1A;">{len(vdf)}건</div>
