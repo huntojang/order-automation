@@ -1509,6 +1509,16 @@ elif page == "송장 다운로드":
                 if '_downloaded_couriers' not in st.session_state:
                     st.session_state['_downloaded_couriers'] = set()
 
+                # 미다운로드 항목 전체 선택 버튼
+                _not_downloaded = [c for c in courier_groups if c not in st.session_state['_downloaded_couriers']]
+                if _not_downloaded:
+                    if st.checkbox(f"미다운로드 전체 선택 ({len(_not_downloaded)}건)", value=True, key="chk_select_all_new"):
+                        st.session_state['_select_all_new'] = True
+                    else:
+                        st.session_state['_select_all_new'] = False
+                else:
+                    st.session_state['_select_all_new'] = False
+
                 # 체크박스 + 다운로드 버튼
                 _selected_couriers = []
                 for courier, group in courier_groups.items():
@@ -1519,7 +1529,8 @@ elif page == "송장 다운로드":
 
                     col_chk, col_info, col_btn = st.columns([0.5, 5, 2])
                     with col_chk:
-                        _checked = st.checkbox("", key=f"chk_{courier}", value=not _is_downloaded, label_visibility="collapsed")
+                        _default = (not _is_downloaded) and st.session_state.get('_select_all_new', True)
+                        _checked = st.checkbox("", key=f"chk_{courier}", value=_default, label_visibility="collapsed")
                         if _checked:
                             _selected_couriers.append(courier)
                     with col_info:
