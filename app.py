@@ -253,6 +253,8 @@ st.markdown("""
     }
 
     /* ===== 프로그레스바 ===== */
+    [data-testid="stProgress"] > div > div,
+    .stProgress > div > div { background-color: #E0E0E0 !important; border-radius: 8px !important; }
     [data-testid="stProgress"] > div > div > div,
     .stProgress > div > div > div { background-color: #2E643C !important; border-radius: 8px !important; }
 
