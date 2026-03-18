@@ -1275,10 +1275,7 @@ elif page == "송장 현황":
             with col1:
                 st.metric("전체 업체", f"{_total_vendors}개")
             with col2:
-                _prev_done = st.session_state.get('_prev_done_vendors', None)
-                st.metric("입력 완료", f"{_done_vendors}개",
-                           delta=f"+{_done_vendors - _prev_done}개" if _prev_done is not None and _done_vendors > _prev_done else None)
-                st.session_state['_prev_done_vendors'] = _done_vendors
+                st.metric("입력 완료", f"{_done_vendors}개")
             with col3:
                 st.metric("입력 중", f"{_in_progress_vendors}개")
             with col4:
@@ -1345,11 +1342,13 @@ elif page == "송장 현황":
                     prev_count = prev_vendor_status.get(name, 0)
                     if d['invoiced'] > prev_count:
                         diff = d['invoiced'] - prev_count
+                        _is_complete = d['invoiced'] == d['total']
                         st.session_state['notification_log'].insert(0, {
                             'time': datetime.now().strftime('%H:%M:%S'),
                             'vendor': name,
-                            'count': diff,
-                            'total': d['invoiced']
+                            'invoiced': d['invoiced'],
+                            'total_orders': d['total'],
+                            'complete': _is_complete,
                         })
 
             # 알림 로그 상단에 렌더링
@@ -1357,9 +1356,18 @@ elif page == "송장 현황":
                 st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
                 if st.session_state.get('notification_log'):
                     for log in st.session_state['notification_log'][:10]:
+                        _inv = log.get('invoiced', log.get('total', 0))
+                        _tot = log.get('total_orders', 0)
+                        _is_done = log.get('complete', False)
+                        if _is_done:
+                            _log_msg = f"[{log['time']}] <strong>{log['vendor']}</strong> 송장 입력 완료 ({_inv}/{_tot}건)"
+                            _log_bg = "#2E643C"
+                        else:
+                            _log_msg = f"[{log['time']}] <strong>{log['vendor']}</strong> 송장 입력 중 ({_inv}/{_tot}건)"
+                            _log_bg = "#B8860B"
                         st.markdown(f"""
-                        <div class="notification-bar">
-                            [{log['time']}] <strong>{log['vendor']}</strong> 송장 +{log['count']}건 (총 {log['total']}건)
+                        <div style="background:{_log_bg};color:white;padding:10px 16px;border-radius:8px;margin-bottom:6px;font-size:0.85rem;">
+                            {_log_msg}
                         </div>
                         """, unsafe_allow_html=True)
                 else:
