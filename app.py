@@ -1364,7 +1364,15 @@ elif page == "송장 현황":
 
             # 알림 로그 상단에 렌더링 (컴팩트 스크롤 방식)
             with notification_area:
-                _logs = st.session_state.get('notification_log', [])
+                _raw_logs = st.session_state.get('notification_log', [])
+                # 업체별 최신 로그만 유지 (중복 제거)
+                _seen_vendors = set()
+                _logs = []
+                for l in _raw_logs:
+                    if l['vendor'] not in _seen_vendors:
+                        _seen_vendors.add(l['vendor'])
+                        _logs.append(l)
+                st.session_state['notification_log'] = _logs
                 if _logs:
                     _done_count = sum(1 for l in _logs if l.get('complete'))
                     _prog_count = sum(1 for l in _logs if not l.get('complete'))
