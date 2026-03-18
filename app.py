@@ -1191,13 +1191,32 @@ if page == "발주 업로드":
 elif page == "송장 현황":
     st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
-    # 30초마다 자동 새로고침 (대시보드 1회 읽기라 부담 없음)
-    refresh_count = st_autorefresh(interval=30000, limit=None, key="invoice_autorefresh")
+    # 60초마다 자동 새로고침 (Apps Script 호출 포함)
+    refresh_count = st_autorefresh(interval=60000, limit=None, key="invoice_autorefresh")
 
     config = Config()
     master_url = config.get_vendor_master_url()
     sheet_client = get_sheet_client()
     vendors_info = load_vendors()
+
+    # Apps Script URL
+    _apps_url = ""
+    try:
+        if "vendor_master" in st.secrets:
+            _apps_url = st.secrets["vendor_master"].get("apps_script_url", "")
+    except Exception:
+        pass
+
+    # 자동 새로고침 시 Apps Script 호출 (60초 쿨다운)
+    _last_refresh = st.session_state.get('_last_apps_refresh', 0)
+    _now = time.time()
+    if _apps_url and (_now - _last_refresh) >= 55:
+        try:
+            _requests.get(_apps_url, params={"action": "refresh"}, timeout=60)
+            st.session_state['_last_apps_refresh'] = _now
+            st.session_state['_dashboard_cache_time'] = 0
+        except Exception:
+            pass
 
     # 알림 로그 (최상단)
     notification_area = st.container()
@@ -1206,27 +1225,19 @@ elif page == "송장 현황":
     with col_refresh:
         if st.button("새로고침"):
             st.session_state['_dashboard_cache_time'] = 0
-            # Apps Script 즉시 호출하여 대시보드 갱신
-            _apps_url = ""
-            try:
-                if "vendor_master" in st.secrets:
-                    _apps_url = st.secrets["vendor_master"].get("apps_script_url", "")
-            except Exception:
-                pass
             if _apps_url:
                 try:
                     with st.spinner("대시보드 갱신 중..."):
                         _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=60)
+                        st.session_state['_last_apps_refresh'] = time.time()
                         if _resp.status_code == 200:
                             st.success("대시보드 갱신 완료!")
                         else:
                             st.warning(f"갱신 응답: {_resp.status_code}")
                 except Exception as e:
                     st.warning(f"Apps Script 호출 실패: {e}")
-            else:
-                st.info("대시보드 탭 다시 읽는 중...")
     with col_status:
-        st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 갱신 (60초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and master_url:
         dashboard = fetch_dashboard(sheet_client, master_url)
