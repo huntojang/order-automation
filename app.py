@@ -1231,6 +1231,11 @@ elif page == "송장 현황":
             # URL 매핑
             vendor_urls = {v['name']: v.get('google_sheet_url', '') for v in vendors_info} if vendors_info else {}
 
+            # 업체 기준 집계
+            _active_vendors = {n: d for n, d in dashboard.items() if d['total'] > 0}
+            _total_vendors = len(_active_vendors)
+            _done_vendors = sum(1 for d in _active_vendors.values() if d['invoiced'] == d['total'] and d['total'] > 0)
+            _pending_vendors = _total_vendors - _done_vendors
             total_orders = sum(d['total'] for d in dashboard.values())
             total_invoices = sum(d['invoiced'] for d in dashboard.values())
 
@@ -1247,23 +1252,25 @@ elif page == "송장 현황":
             st.session_state['prev_invoice_count'] = total_invoices
             st.session_state['prev_vendor_status'] = {name: d['invoiced'] for name, d in dashboard.items()}
 
-            # 전체 요약
+            # 전체 요약 (업체 기준)
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("전체 주문", f"{total_orders}건")
+                st.metric("전체 업체", f"{_total_vendors}개")
             with col2:
-                st.metric("송장 입력 완료", f"{total_invoices}건",
-                           delta=f"+{total_invoices - prev_invoices}건" if prev_invoices is not None and total_invoices > prev_invoices else None)
+                _prev_done = st.session_state.get('_prev_done_vendors', None)
+                st.metric("입력 완료", f"{_done_vendors}개",
+                           delta=f"+{_done_vendors - _prev_done}개" if _prev_done is not None and _done_vendors > _prev_done else None)
+                st.session_state['_prev_done_vendors'] = _done_vendors
             with col3:
-                st.metric("미입력", f"{total_orders - total_invoices}건")
+                st.metric("미입력", f"{_pending_vendors}개")
 
-            if total_orders > 0:
-                _pct = int(total_invoices / total_orders * 100)
+            if _total_vendors > 0:
+                _pct = int(_done_vendors / _total_vendors * 100)
                 st.markdown(f"""
                 <div style="margin:1rem 0;">
                     <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;">
                         <span style="color:#64748B;font-weight:500;">진행률</span>
-                        <span style="color:#0F172A;font-weight:600;">{total_invoices}/{total_orders} ({_pct}%)</span>
+                        <span style="color:#0F172A;font-weight:600;">{_done_vendors}/{_total_vendors} ({_pct}%)</span>
                     </div>
                     <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
                         <div style="background:#2E643C;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
