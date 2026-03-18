@@ -172,6 +172,11 @@ def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
         logging.warning('⚠️  알림톡 설정이 없습니다. 발송을 건너뜁니다.')
         return False
 
+    phone = vendor_info.get('phone', '').strip()
+    if not phone:
+        logging.warning(f'⚠️  {vendor_info.get("name", "?")} 전화번호 없음. 알림톡 발송 건너뜁니다.')
+        return False
+
     try:
         # 메시지 템플릿 포맷팅
         message = config['message_template'].format(
@@ -199,7 +204,7 @@ def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
                 'senderkey': config['sender_key'],
                 'tpl_code': config['template_code'],
                 'sender': config['sender'],
-                'receiver_1': vendor_info['phone'],
+                'receiver_1': phone,
                 'subject_1': '발주 알림',
                 'message_1': message,
                 'button_1': button_info,

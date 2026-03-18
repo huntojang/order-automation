@@ -394,14 +394,14 @@ def load_vendors():
 
 
 def fetch_dashboard(_client, master_url):
-    """대시보드 탭에서 송장 현황 가져오기 (API 1회, 캐시 30초)
-    Apps Script가 5분마다 갱신하는 대시보드 데이터를 읽음.
+    """대시보드 탭에서 송장 현황 가져오기 (API 1회, 캐시 1분)
+    Apps Script가 1분마다 갱신하는 대시보드 데이터를 읽음.
     """
     now = time.time()
     cache = st.session_state.get('_dashboard_cache', {})
     cache_time = st.session_state.get('_dashboard_cache_time', 0)
 
-    if cache and (now - cache_time) < 30:
+    if cache and (now - cache_time) < 60:
         return cache
 
     if not _client or not master_url:
@@ -790,9 +790,9 @@ page = st.radio(
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (30초 간격) =====
+# ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (1분 간격) =====
 if page == "송장 다운로드":
-    bg_refresh = st_autorefresh(interval=30000, limit=None, key="bg_autorefresh")
+    bg_refresh = st_autorefresh(interval=60000, limit=None, key="bg_autorefresh")
 
     # 대시보드에서 변경 감지 (API 1회)
     try:
@@ -1049,7 +1049,7 @@ if page == "발주 업로드":
                         with status_container:
                             st.warning(f"{vendor_name} — 시트 URL 없음")
 
-                    time.sleep(1)
+                    time.sleep(2)  # 429 방지: 분당 60회 Read 제한 준수
 
                 progress.progress(1.0, text="시트 업로드 완료! 알림톡 발송 준비 중...")
 
@@ -1191,8 +1191,8 @@ if page == "발주 업로드":
 elif page == "송장 현황":
     st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
-    # 30초마다 대시보드 탭 자동 읽기 (Apps Script 5분 트리거가 백그라운드에서 갱신)
-    refresh_count = st_autorefresh(interval=30000, limit=None, key="invoice_autorefresh")
+    # 1분마다 대시보드 탭 자동 읽기 (Apps Script 1분 트리거가 백그라운드에서 갱신)
+    refresh_count = st_autorefresh(interval=60000, limit=None, key="invoice_autorefresh")
 
     config = Config()
     master_url = config.get_vendor_master_url()
@@ -1217,8 +1217,10 @@ elif page == "송장 현황":
             st.session_state['_dashboard_cache_time'] = 0
             st.session_state['_dashboard_cache'] = {}
             if sheet_client:
-                sheet_client._spreadsheet_cache.clear()
-                sheet_client._worksheet_cache.clear()
+                if hasattr(sheet_client, '_spreadsheet_cache'):
+                    sheet_client._spreadsheet_cache.clear()
+                if hasattr(sheet_client, '_worksheet_cache'):
+                    sheet_client._worksheet_cache.clear()
             if _apps_url:
                 try:
                     with st.spinner("업체 시트 읽는 중... (약 25초)"):
@@ -1231,7 +1233,7 @@ elif page == "송장 현황":
                     st.warning(f"Apps Script 호출 실패: {e}")
             st.rerun()
     with col_status:
-        st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 새로고침 (1분)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and master_url:
         dashboard = fetch_dashboard(sheet_client, master_url)
@@ -1345,36 +1347,54 @@ elif page == "송장 현황":
                             'complete': _is_complete,
                         })
 
-            # 알림 로그 상단에 렌더링
+            # 알림 로그 상단에 렌더링 (컴팩트 스크롤 방식)
             with notification_area:
-                st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
-                if st.session_state.get('notification_log'):
-                    for log in st.session_state['notification_log'][:10]:
-                        _inv = log.get('invoiced', log.get('total', 0))
+                _logs = st.session_state.get('notification_log', [])
+                if _logs:
+                    _done_count = sum(1 for l in _logs if l.get('complete'))
+                    _prog_count = sum(1 for l in _logs if not l.get('complete'))
+                    _summary_parts = []
+                    if _done_count:
+                        _summary_parts.append(f'<span style="background:#2E643C;color:white;padding:2px 10px;border-radius:12px;font-size:0.8rem;">입력 완료 {_done_count}건</span>')
+                    if _prog_count:
+                        _summary_parts.append(f'<span style="background:#B8860B;color:white;padding:2px 10px;border-radius:12px;font-size:0.8rem;">입력 중 {_prog_count}건</span>')
+
+                    _log_items = ""
+                    for log in _logs[:20]:
+                        _inv = log.get('invoiced', 0)
                         _tot = log.get('total_orders', 0)
                         _is_done = log.get('complete', False)
-                        if _is_done:
-                            _log_msg = f"[{log['time']}] <strong>{log['vendor']}</strong> 송장 입력 완료 ({_inv}/{_tot}건)"
-                            _log_bg = "#2E643C"
-                        else:
-                            _log_msg = f"[{log['time']}] <strong>{log['vendor']}</strong> 송장 입력 중 ({_inv}/{_tot}건)"
-                            _log_bg = "#B8860B"
+                        _dot_color = "#2E643C" if _is_done else "#B8860B"
+                        _status = "완료" if _is_done else "입력 중"
+                        _log_items += f'<div style="padding:3px 0;font-size:0.78rem;color:#555;border-bottom:1px solid #f0f0f0;"><span style="color:{_dot_color};font-weight:bold;">●</span> {log["time"]} <strong>{log["vendor"]}</strong> {_status} ({_inv}/{_tot}건)</div>'
+
+                    st.markdown(f"""
+                    <div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            <span style="font-size:0.85rem;font-weight:600;color:#333;">송장 입력 알림</span>
+                            {' '.join(_summary_parts)}
+                        </div>
+                        <div style="max-height:120px;overflow-y:auto;scrollbar-width:thin;">
+                            {_log_items}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif total_invoices > 0:
+                    _init_items = ""
+                    for name, d in dashboard.items():
+                        if d['invoiced'] > 0:
+                            _init_items += f'<div style="padding:3px 0;font-size:0.78rem;color:#555;border-bottom:1px solid #f0f0f0;"><span style="color:#2E643C;font-weight:bold;">●</span> <strong>{name}</strong> 송장 {d["invoiced"]}건 입력 완료</div>'
+                    if _init_items:
                         st.markdown(f"""
-                        <div style="background:{_log_bg};color:white;padding:10px 16px;border-radius:8px;margin-bottom:6px;font-size:0.85rem;">
-                            {_log_msg}
+                        <div style="background:#f8f9fa;border:1px solid #e0e0e0;border-radius:10px;padding:10px 14px;margin-bottom:10px;">
+                            <div style="font-size:0.85rem;font-weight:600;color:#333;margin-bottom:6px;">송장 입력 알림</div>
+                            <div style="max-height:120px;overflow-y:auto;scrollbar-width:thin;">
+                                {_init_items}
+                            </div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
-                    if total_invoices > 0:
-                        for name, d in dashboard.items():
-                            if d['invoiced'] > 0:
-                                st.markdown(f"""
-                                <div class="notification-bar">
-                                    {name} 송장 {d['invoiced']}건 입력 완료
-                                </div>
-                                """, unsafe_allow_html=True)
-                    else:
-                        st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
+                    st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
 
     else:
         st.warning("구글 시트 연결이 필요합니다")
