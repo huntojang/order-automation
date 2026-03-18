@@ -78,8 +78,18 @@ function doPost(e) {
   }
 }
 
-// GET 요청 (테스트용)
+// GET 요청 (테스트 + 대시보드 즉시 갱신)
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
+
+  if (action === 'refresh') {
+    updateDashboard();
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'ok',
+      message: '대시보드 갱신 완료'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({
     status: 'ok',
     message: '발주도우미 시트 생성 API가 정상 작동 중입니다.'

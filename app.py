@@ -1199,10 +1199,26 @@ elif page == "송장 현황":
     sheet_client = get_sheet_client()
     vendors_info = load_vendors()
 
+    # 알림 로그 (최상단)
+    notification_area = st.container()
+
     col_refresh, col_status = st.columns([1, 3])
     with col_refresh:
         if st.button("새로고침"):
             st.session_state['_dashboard_cache_time'] = 0
+            # Apps Script 즉시 호출하여 대시보드 갱신
+            _apps_url = config._get_apps_script_url() if hasattr(config, '_get_apps_script_url') else ''
+            if not _apps_url:
+                try:
+                    _apps_url = st.secrets.get("vendor_master", {}).get("apps_script_url", "")
+                except Exception:
+                    _apps_url = ""
+            if _apps_url:
+                try:
+                    with st.spinner("대시보드 갱신 중..."):
+                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=30)
+                except Exception:
+                    pass
     with col_status:
         st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
@@ -1292,10 +1308,7 @@ elif page == "송장 현황":
                     </div>
                 </div>""", unsafe_allow_html=True)
 
-            # 알림 로그
-            st.markdown("---")
-            st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
-
+            # 알림 로그 데이터 수집
             if 'notification_log' not in st.session_state:
                 st.session_state['notification_log'] = []
 
@@ -1311,24 +1324,27 @@ elif page == "송장 현황":
                             'total': d['invoiced']
                         })
 
-            if st.session_state.get('notification_log'):
-                for log in st.session_state['notification_log'][:10]:
-                    st.markdown(f"""
-                    <div class="notification-bar">
-                        [{log['time']}] <strong>{log['vendor']}</strong> 송장 +{log['count']}건 (총 {log['total']}건)
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                if total_invoices > 0:
-                    for name, d in dashboard.items():
-                        if d['invoiced'] > 0:
-                            st.markdown(f"""
-                            <div class="notification-bar">
-                                {name} 송장 {d['invoiced']}건 입력 완료
-                            </div>
-                            """, unsafe_allow_html=True)
+            # 알림 로그 상단에 렌더링
+            with notification_area:
+                st.markdown('<div class="section-title">알림 로그</div>', unsafe_allow_html=True)
+                if st.session_state.get('notification_log'):
+                    for log in st.session_state['notification_log'][:10]:
+                        st.markdown(f"""
+                        <div class="notification-bar">
+                            [{log['time']}] <strong>{log['vendor']}</strong> 송장 +{log['count']}건 (총 {log['total']}건)
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
-                    st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
+                    if total_invoices > 0:
+                        for name, d in dashboard.items():
+                            if d['invoiced'] > 0:
+                                st.markdown(f"""
+                                <div class="notification-bar">
+                                    {name} 송장 {d['invoiced']}건 입력 완료
+                                </div>
+                                """, unsafe_allow_html=True)
+                    else:
+                        st.info("아직 입력된 송장이 없습니다. 업체에서 입력하면 여기에 알림이 표시됩니다.")
 
     else:
         st.warning("구글 시트 연결이 필요합니다")
