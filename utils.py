@@ -140,6 +140,7 @@ class GoogleSheetClient:
             raise
 
     _spreadsheet_cache = {}  # URL → spreadsheet 객체 캐시
+    _worksheet_cache = {}    # (URL, index) → worksheet 객체 캐시
 
     def _retry_on_quota(self, fn, max_retries=5):
         """429 Rate Limit 에러 시 자동 재시도 (exponential backoff)"""
@@ -169,6 +170,15 @@ class GoogleSheetClient:
             logging.error(f'❌ 시트 열기 실패 ({url}): {e}')
             return None
 
+    def _get_worksheet_cached(self, sheet_url: str, spreadsheet, worksheet_index: int = 0):
+        """워크시트 객체 캐시 (get_worksheet 호출 = 읽기 API 1회 절약)"""
+        cache_key = (sheet_url, worksheet_index)
+        if cache_key in self._worksheet_cache:
+            return self._worksheet_cache[cache_key]
+        worksheet = self._retry_on_quota(lambda: spreadsheet.get_worksheet(worksheet_index))
+        self._worksheet_cache[cache_key] = worksheet
+        return worksheet
+
     def update_sheet(self, sheet_url: str, data: List[List[Any]],
                      worksheet_index: int = 0):
         """
@@ -183,7 +193,7 @@ class GoogleSheetClient:
             if not spreadsheet:
                 return "시트를 열 수 없습니다 (권한 없음 또는 URL 오류)"
 
-            worksheet = spreadsheet.get_worksheet(worksheet_index)
+            worksheet = self._get_worksheet_cached(sheet_url, spreadsheet, worksheet_index)
 
             # 빈 행 패딩으로 이전 데이터 덮어쓰기 (clear 불필요)
             if data:
@@ -234,7 +244,7 @@ class GoogleSheetClient:
             if not spreadsheet:
                 return []
 
-            worksheet = spreadsheet.get_worksheet(worksheet_index)
+            worksheet = self._get_worksheet_cached(sheet_url, spreadsheet, worksheet_index)
             return worksheet.get_all_values()
 
         except Exception as e:

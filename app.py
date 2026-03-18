@@ -829,13 +829,8 @@ if page == "발주 업로드":
     )
 
     if uploaded_files:
-        # 파일이 변경되면 이전 발주 결과 초기화
+        # 현재 파일 키 (뱃지 표시 판단용)
         _current_file_key = "|".join(sorted(f.file_id for f in uploaded_files))
-        if _current_file_key != st.session_state.get('_prev_file_key', ''):
-            st.session_state['_prev_file_key'] = _current_file_key
-            st.session_state['_upload_done'] = False
-            st.session_state['_upload_results'] = {}
-            st.session_state['_alimtalk_results'] = {}
 
         all_dfs = []
         file_names = []
@@ -859,10 +854,11 @@ if page == "발주 업로드":
         # [2] 공급처별 주문 현황
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
-            # 발주 실행 완료 후에만 뱃지 표시
-            _upload_done = st.session_state.get('_upload_done', False)
-            _upload_results = st.session_state.get('_upload_results', {}) if _upload_done else {}
-            _alimtalk_results = st.session_state.get('_alimtalk_results', {}) if _upload_done else {}
+            # 발주 실행이 완료된 파일에 대해서만 뱃지 표시
+            _processed_key = st.session_state.get('_processed_file_key', '')
+            _show_badges = (_current_file_key == _processed_key)
+            _upload_results = st.session_state.get('_upload_results', {}) if _show_badges else {}
+            _alimtalk_results = st.session_state.get('_alimtalk_results', {}) if _show_badges else {}
             with st.expander(f"공급처별 주문 현황 ({len(vendor_data)}개 업체)", expanded=False):
                 grid_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;">'
                 for name, vdf in vendor_data.items():
@@ -1053,9 +1049,6 @@ if page == "발주 업로드":
 
                 progress.progress(1.0, text="시트 업로드 완료! 알림톡 발송 준비 중...")
 
-                # 업로드된 파일명 기록 (뱃지 초기화 판단용)
-                st.session_state['_last_uploaded_files'] = [f.name for f in uploaded_files]
-
                 # 알림톡 발송 (실제 API 호출)
                 alimtalk_config = Config().load_alimtalk_config()
                 _alimtalk_logs = []
@@ -1109,8 +1102,8 @@ if page == "발주 업로드":
                     })
                 save_upload_log(log_entry)
 
-                # 발주 완료 플래그 설정 (뱃지 표시용)
-                st.session_state['_upload_done'] = True
+                # 발주 완료 파일 키 저장 (뱃지 표시용)
+                st.session_state['_processed_file_key'] = _current_file_key
 
                 # 성공 결과 저장 후 rerun (카드 뱃지 표시를 위해)
                 alimtalk_sent_count = sum(1 for _al in _alimtalk_logs if _al.get('sent'))
