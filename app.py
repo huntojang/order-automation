@@ -410,13 +410,17 @@ def fetch_dashboard(_client, master_url):
     try:
         spreadsheet = _client.open_sheet_by_url(master_url)
         if not spreadsheet:
+            logging.warning('⚠️ 대시보드: 마스터 시트를 열 수 없음')
             return {}
         try:
             worksheet = spreadsheet.worksheet('대시보드')
-        except Exception:
+        except Exception as ws_err:
+            logging.warning(f'⚠️ 대시보드 탭 없음: {ws_err}')
             return {}
         data = worksheet.get_all_values()
+        logging.info(f'📊 대시보드 탭 데이터: {len(data)}행, 헤더={data[0] if data else "없음"}')
         if not data or len(data) < 2:
+            logging.warning(f'⚠️ 대시보드 데이터 부족: {len(data) if data else 0}행')
             return {}
 
         headers = data[0]
@@ -1226,11 +1230,19 @@ elif page == "송장 현황":
                     with st.spinner("업체 시트 읽는 중... (약 25초)"):
                         _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=90)
                         if _resp.status_code == 200:
+                            logging.info(f'✅ Apps Script 응답: {_resp.text[:200]}')
                             st.toast("대시보드 갱신 완료!")
                         else:
+                            logging.warning(f'⚠️ Apps Script 응답 코드: {_resp.status_code}')
                             st.warning(f"갱신 응답: {_resp.status_code}")
                 except Exception as e:
+                    logging.error(f'❌ Apps Script 호출 실패: {e}')
                     st.warning(f"Apps Script 호출 실패: {e}")
+            # 캐시 한번 더 확실히 클리어 (Apps Script 완료 후)
+            st.session_state['_dashboard_cache_time'] = 0
+            st.session_state['_dashboard_cache'] = {}
+            GoogleSheetClient._spreadsheet_cache.clear()
+            GoogleSheetClient._worksheet_cache.clear()
             st.rerun()
     with col_status:
         st.caption(f"자동 새로고침 (1분)  |  {datetime.now().strftime('%H:%M:%S')}")
