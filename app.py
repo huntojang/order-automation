@@ -827,6 +827,14 @@ if page == "발주 업로드":
     )
 
     if uploaded_files:
+        # 파일이 변경되면 이전 발주 결과 초기화
+        _current_file_key = "|".join(sorted(f.file_id for f in uploaded_files))
+        if _current_file_key != st.session_state.get('_prev_file_key', ''):
+            st.session_state['_prev_file_key'] = _current_file_key
+            st.session_state['_upload_done'] = False
+            st.session_state['_upload_results'] = {}
+            st.session_state['_alimtalk_results'] = {}
+
         all_dfs = []
         file_names = []
         for f in uploaded_files:
@@ -849,16 +857,10 @@ if page == "발주 업로드":
         # [2] 공급처별 주문 현황
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
-            _upload_results = st.session_state.get('_upload_results', {})
-            _alimtalk_results = st.session_state.get('_alimtalk_results', {})
-            # session_state 비어있으면 최근 업로드 기록에서 복원
-            if not _upload_results:
-                _history = load_upload_history()
-                if _history:
-                    _latest = _history[0]
-                    for _v in _latest.get('vendors', []):
-                        _upload_results[_v['name']] = _v.get('sheet_uploaded', False)
-                        _alimtalk_results[_v['name']] = _v.get('alimtalk_sent', False)
+            # 발주 실행 완료 후에만 뱃지 표시
+            _upload_done = st.session_state.get('_upload_done', False)
+            _upload_results = st.session_state.get('_upload_results', {}) if _upload_done else {}
+            _alimtalk_results = st.session_state.get('_alimtalk_results', {}) if _upload_done else {}
             with st.expander(f"공급처별 주문 현황 ({len(vendor_data)}개 업체)", expanded=False):
                 grid_html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;">'
                 for name, vdf in vendor_data.items():
@@ -1047,18 +1049,22 @@ if page == "발주 업로드":
 
                     time.sleep(1)
 
-                progress.progress(1.0, text="시트 업로드 완료!")
+                progress.progress(1.0, text="시트 업로드 완료! 알림톡 발송 준비 중...")
+
+                # 업로드된 파일명 기록 (뱃지 초기화 판단용)
+                st.session_state['_last_uploaded_files'] = [f.name for f in uploaded_files]
 
                 # 알림톡 발송 (실제 API 호출)
                 alimtalk_config = Config().load_alimtalk_config()
                 _alimtalk_logs = []
                 _alimtalk_results = {}
-                for vendor_info in vendors_info:
+                _alimtalk_targets = [vi for vi in vendors_info if vi['name'] in vendor_data]
+                _alimtalk_total = len(_alimtalk_targets)
+                for _ai, vendor_info in enumerate(_alimtalk_targets):
                     vendor_name = vendor_info['name']
-                    if vendor_name not in vendor_data:
-                        continue
                     order_count = len(vendor_data[vendor_name])
                     sheet_url = vendor_info.get('google_sheet_url', '')
+                    progress.progress((_ai + 1) / _alimtalk_total, text=f"알림톡 발송 중... ({_ai + 1}/{_alimtalk_total}) {vendor_name}")
                     sent = False
                     if alimtalk_config:
                         sent = send_alimtalk(vendor_info, order_count, alimtalk_config)
@@ -1100,6 +1106,9 @@ if page == "발주 업로드":
                         'sheet_url': _al['sheet_url']
                     })
                 save_upload_log(log_entry)
+
+                # 발주 완료 플래그 설정 (뱃지 표시용)
+                st.session_state['_upload_done'] = True
 
                 # 성공 결과 저장 후 rerun (카드 뱃지 표시를 위해)
                 alimtalk_sent_count = sum(1 for _al in _alimtalk_logs if _al.get('sent'))
