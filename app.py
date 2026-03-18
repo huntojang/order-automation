@@ -1504,18 +1504,71 @@ elif page == "송장 다운로드":
             else:
                 courier_summary = ", ".join([f"{c} {len(g)}건" for c, g in courier_groups.items()])
                 st.caption(f"택배사별로 개별 엑셀 파일을 다운로드해요. ({courier_summary})")
+
+                # 다운로드 이력 관리
+                if '_downloaded_couriers' not in st.session_state:
+                    st.session_state['_downloaded_couriers'] = set()
+
+                # 체크박스 + 다운로드 버튼
+                _selected_couriers = []
                 for courier, group in courier_groups.items():
-                    buffer = BytesIO()
-                    group[available_cols].to_excel(buffer, index=False, engine='openpyxl')
-                    buffer.seek(0)
-                    st.download_button(
-                        label=f"{courier} — {len(group)}건 다운로드",
-                        data=buffer,
-                        file_name=f"송장_{today}_{courier}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
-                        key=f"dl_{courier}"
-                    )
+                    _is_downloaded = courier in st.session_state['_downloaded_couriers']
+                    _dl_label = f"  {courier} — {len(group)}건"
+                    if _is_downloaded:
+                        _dl_label += "  (다운로드 완료)"
+
+                    col_chk, col_info, col_btn = st.columns([0.5, 5, 2])
+                    with col_chk:
+                        _checked = st.checkbox("", key=f"chk_{courier}", value=not _is_downloaded, label_visibility="collapsed")
+                        if _checked:
+                            _selected_couriers.append(courier)
+                    with col_info:
+                        if _is_downloaded:
+                            st.markdown(f'**{courier}** — {len(group)}건 <span style="background:#E8F5E9;color:#2E643C;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;">다운로드 완료</span>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'**{courier}** — {len(group)}건')
+                    with col_btn:
+                        buffer = BytesIO()
+                        group[available_cols].to_excel(buffer, index=False, engine='openpyxl')
+                        buffer.seek(0)
+                        st.download_button(
+                            label="다운로드",
+                            data=buffer,
+                            file_name=f"송장_{today}_{courier}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"dl_{courier}",
+                            on_click=lambda c=courier: st.session_state['_downloaded_couriers'].add(c)
+                        )
+
+                # 선택 다운로드 (ZIP)
+                if len(courier_groups) > 1:
+                    st.markdown("---")
+                    if _selected_couriers:
+                        import zipfile
+                        zip_buffer = BytesIO()
+                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                            for c in _selected_couriers:
+                                g = courier_groups[c]
+                                buf = BytesIO()
+                                g[available_cols].to_excel(buf, index=False, engine='openpyxl')
+                                zf.writestr(f"송장_{today}_{c}.xlsx", buf.getvalue())
+                        zip_buffer.seek(0)
+
+                        def _mark_selected_downloaded():
+                            for c in _selected_couriers:
+                                st.session_state['_downloaded_couriers'].add(c)
+
+                        st.download_button(
+                            label=f"선택한 {len(_selected_couriers)}개 파일 일괄 다운로드 (ZIP)",
+                            data=zip_buffer,
+                            file_name=f"송장_{today}_선택.zip",
+                            mime="application/zip",
+                            type="primary",
+                            use_container_width=True,
+                            on_click=_mark_selected_downloaded
+                        )
+                    else:
+                        st.info("다운로드할 택배사를 선택해주세요.")
 
 
 # ===== 업체 관리 페이지 =====
