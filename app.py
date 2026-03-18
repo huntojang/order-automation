@@ -1213,18 +1213,23 @@ elif page == "송장 현황":
     col_refresh, col_status = st.columns([1, 3])
     with col_refresh:
         if st.button("새로고침"):
+            # 모든 캐시 클리어
             st.session_state['_dashboard_cache_time'] = 0
+            st.session_state['_dashboard_cache'] = {}
+            if sheet_client:
+                sheet_client._spreadsheet_cache.clear()
+                sheet_client._worksheet_cache.clear()
             if _apps_url:
                 try:
-                    with st.spinner("대시보드 갱신 중..."):
-                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=60)
-                        st.session_state['_last_apps_refresh'] = time.time()
+                    with st.spinner("업체 시트 읽는 중... (약 25초)"):
+                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=90)
                         if _resp.status_code == 200:
-                            st.success("대시보드 갱신 완료!")
+                            st.toast("대시보드 갱신 완료!")
                         else:
                             st.warning(f"갱신 응답: {_resp.status_code}")
                 except Exception as e:
                     st.warning(f"Apps Script 호출 실패: {e}")
+            st.rerun()
     with col_status:
         st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
