@@ -851,6 +851,9 @@ if page == "발주 업로드":
         with st.expander(f"{file_label} — 데이터 미리보기 (총 {len(merged_df)}건)", expanded=False):
             st.dataframe(merged_df.head(10), use_container_width=True)
 
+        # 프로그레스 영역 (발주 실행 시 스크롤 없이 바로 보이도록 그리드 위에 배치)
+        progress_area = st.container()
+
         # [2] 공급처별 주문 현황
         vendor_data = split_by_vendor(merged_df)
         if vendor_data:
@@ -1007,8 +1010,9 @@ if page == "발주 업로드":
             if not sheet_client:
                 st.error("구글 시트 연결이 필요합니다")
             else:
-                progress = st.progress(0, text="발주 처리 중...")
-                status_container = st.container()
+                with progress_area:
+                    progress = st.progress(0, text="발주 처리 중...")
+                    status_container = st.container()
 
                 total = len(vendors_info)
                 success_count = 0
