@@ -1207,18 +1207,24 @@ elif page == "송장 현황":
         if st.button("새로고침"):
             st.session_state['_dashboard_cache_time'] = 0
             # Apps Script 즉시 호출하여 대시보드 갱신
-            _apps_url = config._get_apps_script_url() if hasattr(config, '_get_apps_script_url') else ''
-            if not _apps_url:
-                try:
-                    _apps_url = st.secrets.get("vendor_master", {}).get("apps_script_url", "")
-                except Exception:
-                    _apps_url = ""
+            _apps_url = ""
+            try:
+                if "vendor_master" in st.secrets:
+                    _apps_url = st.secrets["vendor_master"].get("apps_script_url", "")
+            except Exception:
+                pass
             if _apps_url:
                 try:
                     with st.spinner("대시보드 갱신 중..."):
-                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=30)
-                except Exception:
-                    pass
+                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=60)
+                        if _resp.status_code == 200:
+                            st.success("대시보드 갱신 완료!")
+                        else:
+                            st.warning(f"갱신 응답: {_resp.status_code}")
+                except Exception as e:
+                    st.warning(f"Apps Script 호출 실패: {e}")
+            else:
+                st.info("대시보드 탭 다시 읽는 중...")
     with col_status:
         st.caption(f"자동 새로고침 (30초)  |  {datetime.now().strftime('%H:%M:%S')}")
 
