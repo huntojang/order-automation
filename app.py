@@ -1349,8 +1349,11 @@ elif page == "송장 현황":
                 for name, d in dashboard.items():
                     prev_count = prev_vendor_status.get(name, 0)
                     if d['invoiced'] > prev_count:
-                        diff = d['invoiced'] - prev_count
                         _is_complete = d['invoiced'] == d['total']
+                        # 같은 업체의 이전 로그 제거 (최신 상태만 유지)
+                        st.session_state['notification_log'] = [
+                            l for l in st.session_state['notification_log'] if l['vendor'] != name
+                        ]
                         st.session_state['notification_log'].insert(0, {
                             'time': datetime.now().strftime('%H:%M:%S'),
                             'vendor': name,
