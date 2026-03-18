@@ -1241,7 +1241,8 @@ elif page == "송장 현황":
             _active_vendors = {n: d for n, d in dashboard.items() if d['total'] > 0}
             _total_vendors = len(_active_vendors)
             _done_vendors = sum(1 for d in _active_vendors.values() if d['invoiced'] == d['total'] and d['total'] > 0)
-            _pending_vendors = _total_vendors - _done_vendors
+            _in_progress_vendors = sum(1 for d in _active_vendors.values() if 0 < d['invoiced'] < d['total'])
+            _no_input_vendors = sum(1 for d in _active_vendors.values() if d['invoiced'] == 0)
             total_orders = sum(d['total'] for d in dashboard.values())
             total_invoices = sum(d['invoiced'] for d in dashboard.values())
 
@@ -1258,8 +1259,8 @@ elif page == "송장 현황":
             st.session_state['prev_invoice_count'] = total_invoices
             st.session_state['prev_vendor_status'] = {name: d['invoiced'] for name, d in dashboard.items()}
 
-            # 전체 요약 (업체 기준)
-            col1, col2, col3 = st.columns(3)
+            # 전체 요약 (업체 기준 - 4단계)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("전체 업체", f"{_total_vendors}개")
             with col2:
@@ -1268,15 +1269,18 @@ elif page == "송장 현황":
                            delta=f"+{_done_vendors - _prev_done}개" if _prev_done is not None and _done_vendors > _prev_done else None)
                 st.session_state['_prev_done_vendors'] = _done_vendors
             with col3:
-                st.metric("미입력", f"{_pending_vendors}개")
+                st.metric("입력 중", f"{_in_progress_vendors}개")
+            with col4:
+                st.metric("미입력", f"{_no_input_vendors}개")
 
             if _total_vendors > 0:
-                _pct = int(_done_vendors / _total_vendors * 100)
+                _started = _done_vendors + _in_progress_vendors
+                _pct = int(_started / _total_vendors * 100)
                 st.markdown(f"""
                 <div style="margin:1rem 0;">
                     <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;">
-                        <span style="color:#64748B;font-weight:500;">진행률</span>
-                        <span style="color:#0F172A;font-weight:600;">{_done_vendors}/{_total_vendors} ({_pct}%)</span>
+                        <span style="color:#64748B;font-weight:500;">진행률 (입력 시작 업체)</span>
+                        <span style="color:#0F172A;font-weight:600;">{_started}/{_total_vendors} ({_pct}%)</span>
                     </div>
                     <div style="background:#E2E8F0;border-radius:8px;height:10px;overflow:hidden;">
                         <div style="background:#2E643C;width:{_pct}%;height:100%;border-radius:8px;transition:width 0.4s ease;"></div>
