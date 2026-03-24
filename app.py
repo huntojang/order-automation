@@ -794,9 +794,9 @@ page = st.radio(
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (1분 간격) =====
+# ===== 송장 다운로드 페이지에서 백그라운드 송장 변경 감지 (5분 간격) =====
 if page == "송장 다운로드":
-    bg_refresh = st_autorefresh(interval=60000, limit=None, key="bg_autorefresh")
+    bg_refresh = st_autorefresh(interval=300000, limit=None, key="bg_autorefresh")
 
     # 대시보드에서 변경 감지 (API 1회)
     try:
@@ -1195,8 +1195,8 @@ if page == "발주 업로드":
 elif page == "송장 현황":
     st.markdown('<div class="main-header">송장 현황</div>', unsafe_allow_html=True)
 
-    # 1분마다 대시보드 탭 자동 읽기 (Apps Script 1분 트리거가 백그라운드에서 갱신)
-    refresh_count = st_autorefresh(interval=60000, limit=None, key="invoice_autorefresh")
+    # 5분마다 대시보드 탭 자동 읽기 (Apps Script 5분 트리거가 백그라운드에서 갱신)
+    refresh_count = st_autorefresh(interval=300000, limit=None, key="invoice_autorefresh")
 
     config = Config()
     master_url = config.get_vendor_master_url()

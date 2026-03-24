@@ -109,22 +109,22 @@ function doGet(e) {
  * 2. 트리거 탭(시계 아이콘) → 트리거 추가
  *    - 실행할 함수: updateDashboard
  *    - 이벤트 소스: 시간 기반
- *    - 시간 간격: 5분마다
+ *    - 시간 간격: 10분마다 (5분 이하는 일일 할당량 초과 위험)
  */
 var MASTER_SHEET_ID = '18_cKCFmBvUjIqlmdyidgYZ226uk4SRWYh-Rv0rWovyc';
 
 function updateDashboard() {
+  var startTime = new Date().getTime();
   var masterSS = SpreadsheetApp.openById(MASTER_SHEET_ID);
-  var vendorSheet = masterSS.getSheetByName('업체목록');
+  var vendorSheet = masterSS.getSheetByName('시트1');
   if (!vendorSheet) {
-    Logger.log('업체목록 시트를 찾을 수 없습니다');
+    Logger.log('시트1 탭을 찾을 수 없습니다');
     return;
   }
 
   var vendorData = vendorSheet.getDataRange().getValues();
   var headers_row = vendorData[0];
 
-  // 열 인덱스 찾기
   var nameIdx = headers_row.indexOf('업체명');
   var urlIdx = headers_row.indexOf('구글시트URL');
   var statusIdx = headers_row.indexOf('상태');
@@ -133,67 +133,128 @@ function updateDashboard() {
     return;
   }
 
-  // 대시보드 시트 생성 또는 가져오기
   var dashboard = masterSS.getSheetByName('대시보드');
   if (!dashboard) {
     dashboard = masterSS.insertSheet('대시보드');
   }
 
-  var dashHeaders = ['업체명', '전체주문', '송장완료', '미입력', '완료율', '최종갱신'];
-  var results = [dashHeaders];
-
+  // 활성 업체 목록 수집
+  var vendors = [];
   for (var i = 1; i < vendorData.length; i++) {
     var name = vendorData[i][nameIdx];
     var url = vendorData[i][urlIdx];
     var status = statusIdx >= 0 ? vendorData[i][statusIdx] : '';
-
     if (!name || !url || status === '비활성') continue;
 
-    try {
-      var vendorSS = SpreadsheetApp.openByUrl(url);
-      var sheet = vendorSS.getSheets()[0];
-      var data = sheet.getDataRange().getValues();
+    var sheetId = extractSheetId(url);
+    if (sheetId) {
+      vendors.push({ name: name, sheetId: sheetId });
+    }
+  }
 
-      var totalOrders = Math.max(0, data.length - 1);
+  // 병렬 요청: 모든 업체 시트 데이터를 한번에 fetch (UrlFetchApp.fetchAll)
+  var token = ScriptApp.getOAuthToken();
+  var requests = [];
+  for (var v = 0; v < vendors.length; v++) {
+    // 시트1의 A1:K200 범위만 읽기 (헤더 + 데이터)
+    var apiUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + vendors[v].sheetId
+      + '/values/%EC%8B%9C%ED%8A%B81!A1:K200';  // 시트1 (URL 인코딩)
+    requests.push({
+      url: apiUrl,
+      method: 'get',
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+  }
+
+  // 10개씩 배치로 병렬 요청 (분당 60회 제한 준수)
+  var BATCH_SIZE = 10;
+  var responses = [];
+  var totalBatches = Math.ceil(requests.length / BATCH_SIZE);
+  Logger.log('병렬 요청 시작: ' + requests.length + '개 업체, ' + totalBatches + '배치');
+
+  for (var b = 0; b < totalBatches; b++) {
+    var batch = requests.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+    var batchResp = UrlFetchApp.fetchAll(batch);
+    for (var br = 0; br < batchResp.length; br++) {
+      responses.push(batchResp[br]);
+    }
+    // 마지막 배치가 아니면 15초 대기 (rate limit 방지)
+    if (b < totalBatches - 1) {
+      Utilities.sleep(15000);
+    }
+  }
+
+  var fetchTime = Math.round((new Date().getTime() - startTime) / 1000);
+  Logger.log('배치 fetch 완료: ' + fetchTime + '초');
+
+  // 응답 처리
+  var dashHeaders = ['업체명', '전체주문', '송장완료', '미입력', '완료율', '최종갱신'];
+  var results = [dashHeaders];
+  var now = new Date();
+
+  for (var v = 0; v < vendors.length; v++) {
+    var vendorName = vendors[v].name;
+    try {
+      var resp = responses[v];
+      if (resp.getResponseCode() !== 200) {
+        Logger.log('읽기 실패: ' + vendorName + ' - HTTP ' + resp.getResponseCode());
+        results.push([vendorName, -1, 0, 0, 0, now]);
+        continue;
+      }
+
+      var json = JSON.parse(resp.getContentText());
+      var values = json.values || [];
+
+      if (values.length <= 1) {
+        results.push([vendorName, 0, 0, 0, 0, now]);
+        continue;
+      }
+
+      var headerRow = values[0];
+      var invoiceCol = headerRow.indexOf('송장번호');
+
+      var totalOrders = 0;
       var invoiced = 0;
 
-      // 송장번호 열 찾기
-      if (data.length > 0) {
-        var invoiceCol = data[0].indexOf('송장번호');
-        if (invoiceCol >= 0) {
-          for (var r = 1; r < data.length; r++) {
-            // 빈 행 스킵 (패딩된 빈 행 제외)
-            var hasData = false;
-            for (var c = 0; c < Math.min(data[r].length, 5); c++) {
-              if (data[r][c] && String(data[r][c]).trim() !== '') {
-                hasData = true;
-                break;
-              }
-            }
-            if (!hasData) {
-              totalOrders = r - 1;
-              break;
-            }
-            if (data[r][invoiceCol] && String(data[r][invoiceCol]).trim() !== '') {
-              invoiced++;
-            }
+      for (var r = 1; r < values.length; r++) {
+        // 빈 행 체크 (첫 5열)
+        var hasData = false;
+        for (var c = 0; c < Math.min(values[r].length, 5); c++) {
+          if (values[r][c] && String(values[r][c]).trim() !== '') {
+            hasData = true;
+            break;
+          }
+        }
+        if (!hasData) break;
+
+        totalOrders++;
+        if (invoiceCol >= 0 && invoiceCol < values[r].length) {
+          if (values[r][invoiceCol] && String(values[r][invoiceCol]).trim() !== '') {
+            invoiced++;
           }
         }
       }
 
       var pending = totalOrders - invoiced;
       var rate = totalOrders > 0 ? Math.round(invoiced / totalOrders * 100) : 0;
-      results.push([name, totalOrders, invoiced, pending, rate, new Date()]);
+      results.push([vendorName, totalOrders, invoiced, pending, rate, now]);
 
     } catch (e) {
-      Logger.log('읽기 실패: ' + name + ' - ' + e.toString());
-      results.push([name, -1, 0, 0, 0, new Date()]);
+      Logger.log('처리 실패: ' + vendorName + ' - ' + e.toString());
+      results.push([vendorName, -1, 0, 0, 0, now]);
     }
   }
 
   dashboard.clear();
   dashboard.getRange(1, 1, results.length, dashHeaders.length).setValues(results);
-  Logger.log('대시보드 갱신 완료: ' + (results.length - 1) + '개 업체');
+  var elapsed = Math.round((new Date().getTime() - startTime) / 1000);
+  Logger.log('대시보드 갱신 완료: ' + (results.length - 1) + '개 업체, ' + elapsed + '초 소요');
+}
+
+function extractSheetId(url) {
+  var match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
 }
 
 
