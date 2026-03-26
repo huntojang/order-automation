@@ -158,22 +158,29 @@ def prepare_sheet_data(df: pd.DataFrame) -> list:
 
 def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
     """
-    카카오 알림톡 발송
+    카카오 알림톡 발송 (업체당 최대 3개 번호로 발송)
 
     Args:
-        vendor_info: 업체 정보
+        vendor_info: 업체 정보 (phones 리스트 또는 phone 단일 값)
         order_count: 주문 건수
         config: 알림톡 설정
 
     Returns:
-        성공 여부
+        성공 여부 (1건이라도 성공하면 True)
     """
     if not config:
         logging.warning('⚠️  알림톡 설정이 없습니다. 발송을 건너뜁니다.')
         return False
 
-    phone = vendor_info.get('phone', '').strip()
-    if not phone:
+    # phones 리스트 우선, 없으면 phone 단일 값으로 폴백
+    phones = vendor_info.get('phones', [])
+    if not phones:
+        phone = vendor_info.get('phone', '').strip()
+        if phone:
+            phones = [phone]
+    phones = [p.strip() for p in phones if p.strip()]
+
+    if not phones:
         logging.warning(f'⚠️  {vendor_info.get("name", "?")} 전화번호 없음. 알림톡 발송 건너뜁니다.')
         return False
 
@@ -198,17 +205,20 @@ def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
                     "url_pc": vendor_info['google_sheet_url']
                 }]
             })
+
+            # 알리고 API는 한 요청에 최대 500명까지 receiver_N 으로 다중 발송 가능
             payload = {
                 'apikey': config['api_key'],
                 'userid': config['user_id'],
                 'senderkey': config['sender_key'],
                 'tpl_code': config['template_code'],
                 'sender': config['sender'],
-                'receiver_1': phone,
-                'subject_1': '발주 알림',
-                'message_1': message,
-                'button_1': button_info,
             }
+            for idx, phone in enumerate(phones, start=1):
+                payload[f'receiver_{idx}'] = phone
+                payload[f'subject_{idx}'] = '발주 알림'
+                payload[f'message_{idx}'] = message
+                payload[f'button_{idx}'] = button_info
         else:
             logging.error(f'❌ 지원하지 않는 서비스: {config["service"]}')
             return False
@@ -219,7 +229,8 @@ def send_alimtalk(vendor_info: dict, order_count: int, config: dict) -> bool:
         if response.status_code == 200:
             result = response.json()
             if result.get('code') == 0:
-                logging.info(f'✅ 알림톡 발송 성공: {vendor_info["name"]} ({vendor_info["phone"]})')
+                phone_str = ', '.join(phones)
+                logging.info(f'✅ 알림톡 발송 성공: {vendor_info["name"]} ({phone_str}) {len(phones)}건')
                 return True
             else:
                 logging.error(f'❌ 알림톡 발송 실패: {result.get("message")}')

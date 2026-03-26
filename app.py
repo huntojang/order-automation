@@ -898,7 +898,7 @@ if page == "발주 업로드":
             _vendors_with_phone = set()
             _retry_vendors_info = load_vendors()
             for _vi in _retry_vendors_info:
-                if _vi.get('phone', '').strip():
+                if _vi.get('phones') or _vi.get('phone', '').strip():
                     _vendors_with_phone.add(_vi['name'])
             _failed_alimtalk = [n for n in _failed_alimtalk if n in _vendors_with_phone]
 
@@ -1075,6 +1075,7 @@ if page == "발주 업로드":
                     _alimtalk_logs.append({
                         'name': vendor_name,
                         'phone': vendor_info.get('phone', ''),
+                        'phones': vendor_info.get('phones', []),
                         'count': order_count,
                         'sheet_url': sheet_url,
                         'sent': sent,
@@ -1103,6 +1104,7 @@ if page == "발주 업로드":
                     log_entry['vendors'].append({
                         'name': _al['name'],
                         'phone': _al['phone'],
+                        'phones': _al.get('phones', []),
                         'orders': _al['count'],
                         'sheet_uploaded': True,
                         'alimtalk_sent': _al.get('sent', False),
@@ -1671,18 +1673,24 @@ elif page == "업체 관리":
                 new_name = st.text_input("업체명 *")
                 new_contact = st.text_input("담당자")
             with col2:
-                new_phone = st.text_input("전화번호 * (알림톡 수신)")
+                new_phone = st.text_input("전화번호1 * (알림톡 수신)")
                 new_email = st.text_input("이메일 (선택)")
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                new_phone2 = st.text_input("전화번호2 (선택)")
+            with pc2:
+                new_phone3 = st.text_input("전화번호3 (선택)")
             new_sheet_url = st.text_input("구글 시트 URL (비워두면 자동 생성)")
             submitted = st.form_submit_button("업체 등록", type="primary", use_container_width=True)
             if submitted:
                 if not new_name or not new_phone:
-                    st.error("업체명과 전화번호는 필수입니다.")
+                    st.error("업체명과 전화번호1은 필수입니다.")
                 else:
                     with st.spinner(f"{new_name} 등록 중..."):
                         result = vm.add_vendor(
                             new_name, new_contact or '', new_phone,
-                            new_email or '', sheet_url=new_sheet_url or None
+                            new_email or '', sheet_url=new_sheet_url or None,
+                            phone2=new_phone2 or '', phone3=new_phone3 or ''
                         )
                     if result:
                         if result.get('google_sheet_url'):
@@ -1713,10 +1721,14 @@ elif page == "업체 관리":
                 vid = v.get('업체ID', '')
                 vname = v.get('업체명', '')
                 vphone = v.get('전화번호', '')
+                vphone2 = v.get('전화번호2', '')
+                vphone3 = v.get('전화번호3', '')
                 vcontact = v.get('담당자', '')
                 vemail = v.get('이메일', '')
                 vurl = v.get('구글시트URL', '')
                 vdate = v.get('등록일', '')
+                # 표시용 전화번호 (등록된 번호 모두 표시)
+                vphones_display = ', '.join([p for p in [vphone, vphone2, vphone3] if p])
 
                 edit_key = f"editing_{vid}"
                 is_editing = st.session_state.get(edit_key, False)
@@ -1729,8 +1741,13 @@ elif page == "업체 관리":
                             ed_name = st.text_input("업체명", value=vname, key=f"ed_name_{vid}")
                             ed_contact = st.text_input("담당자", value=vcontact, key=f"ed_contact_{vid}")
                         with ec2:
-                            ed_phone = st.text_input("전화번호", value=vphone, key=f"ed_phone_{vid}")
+                            ed_phone = st.text_input("전화번호1", value=vphone, key=f"ed_phone_{vid}")
                             ed_email = st.text_input("이메일", value=vemail, key=f"ed_email_{vid}")
+                        epc1, epc2 = st.columns(2)
+                        with epc1:
+                            ed_phone2 = st.text_input("전화번호2", value=vphone2, key=f"ed_phone2_{vid}")
+                        with epc2:
+                            ed_phone3 = st.text_input("전화번호3", value=vphone3, key=f"ed_phone3_{vid}")
                         bc1, bc2 = st.columns(2)
                         with bc1:
                             save_btn = st.form_submit_button("저장", type="primary", use_container_width=True)
@@ -1739,7 +1756,8 @@ elif page == "업체 관리":
                         if save_btn:
                             vm.update_vendor(vid, **{
                                 '업체명': ed_name, '담당자': ed_contact,
-                                '전화번호': ed_phone, '이메일': ed_email
+                                '전화번호': ed_phone, '전화번호2': ed_phone2,
+                                '전화번호3': ed_phone3, '이메일': ed_email
                             })
                             st.session_state[edit_key] = False
                             st.cache_data.clear()
@@ -1755,7 +1773,7 @@ elif page == "업체 관리":
                         <div class="list-row">
                             <div style="flex:1;">
                                 <div class="list-name">{vname}</div>
-                                <div class="list-desc">{vphone} · {vcontact}{sheet_link}</div>
+                                <div class="list-desc">{vphones_display} · {vcontact}{sheet_link}</div>
                             </div>
                         </div>""", unsafe_allow_html=True)
                     with col_edit:
@@ -1774,14 +1792,14 @@ elif page == "업체 관리":
                     for v in inactive:
                         vid = v.get('업체ID', '')
                         vname = v.get('업체명', '')
-                        vphone = v.get('전화번호', '')
+                        vphones_inactive = ', '.join([p for p in [v.get('전화번호', ''), v.get('전화번호2', ''), v.get('전화번호3', '')] if p])
                         col_info, col_restore = st.columns([6, 1])
                         with col_info:
                             st.markdown(f"""
                             <div class="list-row" style="opacity:0.5;">
                                 <div style="flex:1;">
                                     <div class="list-name">{vname}</div>
-                                    <div class="list-desc">{vphone} · 비활성</div>
+                                    <div class="list-desc">{vphones_inactive} · 비활성</div>
                                 </div>
                             </div>""", unsafe_allow_html=True)
                         with col_restore:

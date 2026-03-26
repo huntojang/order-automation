@@ -449,7 +449,7 @@ def get_latest_file(directory: str, pattern: str = '*.xlsx') -> str:
 class VendorManager:
     """업체 마스터 시트 기반 CRUD 관리"""
 
-    HEADERS = ['업체ID', '업체명', '담당자', '전화번호', '이메일', '구글시트URL', '등록일', '상태']
+    HEADERS = ['업체ID', '업체명', '담당자', '전화번호', '전화번호2', '전화번호3', '이메일', '구글시트URL', '등록일', '상태']
     SHEET_HEADERS = ['주문일자', '주문번호', '수취인명', '연락처', '주소',
                      '상품명', '옵션', '수량', '택배사', '송장번호']
 
@@ -477,14 +477,19 @@ class VendorManager:
             item = dict(zip(headers, row))
             if item.get('상태', '') == '비활성':
                 continue
-            phone = str(item.get('전화번호', '')).strip()
-            if phone and not phone.startswith('0'):
-                phone = '0' + phone
+            phones = []
+            for key in ['전화번호', '전화번호2', '전화번호3']:
+                p = str(item.get(key, '')).strip()
+                if p and p != 'None':
+                    if not p.startswith('0'):
+                        p = '0' + p
+                    phones.append(p)
             vendors.append({
                 'id': item.get('업체ID', ''),
                 'name': item.get('업체명', ''),
                 'contact_person': item.get('담당자', ''),
-                'phone': phone,
+                'phone': phones[0] if phones else '',
+                'phones': phones,
                 'email': item.get('이메일', ''),
                 'google_sheet_url': item.get('구글시트URL', ''),
             })
@@ -502,15 +507,17 @@ class VendorManager:
             if len(row) < len(headers):
                 row += [''] * (len(headers) - len(row))
             item = dict(zip(headers, row))
-            phone = str(item.get('전화번호', '')).strip()
-            if phone and not phone.startswith('0'):
-                phone = '0' + phone
-            item['전화번호'] = phone
+            for key in ['전화번호', '전화번호2', '전화번호3']:
+                p = str(item.get(key, '')).strip()
+                if p and p != 'None' and not p.startswith('0'):
+                    p = '0' + p
+                item[key] = p if (p and p != 'None') else ''
             vendors.append(item)
         return vendors
 
     def add_vendor(self, name: str, contact_person: str, phone: str,
-                   email: str = '', sheet_url: str = None) -> Dict[str, Any]:
+                   email: str = '', sheet_url: str = None,
+                   phone2: str = '', phone3: str = '') -> Dict[str, Any]:
         """업체 추가 (전용 시트 자동 생성 또는 URL 직접 지정)"""
         vendor_id = f"vendor_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         today = datetime.now().strftime('%Y-%m-%d')
@@ -519,14 +526,16 @@ class VendorManager:
         if not sheet_url:
             sheet_url = self._create_vendor_sheet(name)
 
-        row = [vendor_id, name, contact_person, phone, email, sheet_url, today, '활성']
+        row = [vendor_id, name, contact_person, phone, phone2, phone3, email, sheet_url, today, '활성']
         self.client.append_row(self.master_url, row)
 
+        phones = [p for p in [phone, phone2, phone3] if p.strip()]
         return {
             'id': vendor_id,
             'name': name,
             'contact_person': contact_person,
             'phone': phone,
+            'phones': phones,
             'email': email,
             'google_sheet_url': sheet_url,
         }
