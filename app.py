@@ -243,13 +243,13 @@ st.markdown("""
 
     /* ===== 입력 필드 ===== */
     [data-testid="stTextInput"] input {
-        background-color: #F0F7F2 !important;
-        border: 1px solid #D4E6D9 !important;
+        background-color: #F5F5F5 !important;
+        border: 1px solid #E0E0E0 !important;
         border-radius: 10px !important;
     }
     [data-testid="stTextInput"] input:focus {
-        border-color: #2E643C !important;
-        box-shadow: 0 0 0 1px #2E643C !important;
+        border-color: #BDBDBD !important;
+        box-shadow: 0 0 0 1px #BDBDBD !important;
     }
     /* 전화번호 필드 파란색 강조 (aria-label 기반) */
     input[aria-label*="전화번호"] {
