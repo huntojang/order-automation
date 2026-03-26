@@ -251,12 +251,12 @@ st.markdown("""
         border-color: #2E643C !important;
         box-shadow: 0 0 0 1px #2E643C !important;
     }
-    /* 전화번호 필드 파란색 강조 */
-    .phone-field input {
+    /* 전화번호 필드 파란색 강조 (aria-label 기반) */
+    input[aria-label*="전화번호"] {
         background-color: #EBF3FB !important;
         border: 1px solid #B0CDE8 !important;
     }
-    .phone-field input:focus {
+    input[aria-label*="전화번호"]:focus {
         border-color: #3B82C4 !important;
         box-shadow: 0 0 0 1px #3B82C4 !important;
     }
@@ -1686,18 +1686,12 @@ elif page == "업체 관리":
             with col3:
                 new_email = st.text_input("이메일 (선택)")
             with col4:
-                st.markdown('<div class="phone-field">', unsafe_allow_html=True)
                 new_phone = st.text_input("전화번호1 * (알림톡 수신)")
-                st.markdown('</div>', unsafe_allow_html=True)
             pc1, pc2 = st.columns(2)
             with pc1:
-                st.markdown('<div class="phone-field">', unsafe_allow_html=True)
                 new_phone2 = st.text_input("전화번호2 (선택)")
-                st.markdown('</div>', unsafe_allow_html=True)
             with pc2:
-                st.markdown('<div class="phone-field">', unsafe_allow_html=True)
                 new_phone3 = st.text_input("전화번호3 (선택)")
-                st.markdown('</div>', unsafe_allow_html=True)
             new_sheet_url = st.text_input("구글 시트 URL (비워두면 자동 생성)")
             submitted = st.form_submit_button("업체 등록", type="primary", use_container_width=True)
             if submitted:
@@ -1759,19 +1753,13 @@ elif page == "업체 관리":
                             ed_name = st.text_input("업체명", value=vname, key=f"ed_name_{vid}")
                             ed_contact = st.text_input("담당자", value=vcontact, key=f"ed_contact_{vid}")
                         with ec2:
-                            st.markdown('<div class="phone-field">', unsafe_allow_html=True)
                             ed_phone = st.text_input("전화번호1", value=vphone, key=f"ed_phone_{vid}")
-                            st.markdown('</div>', unsafe_allow_html=True)
                             ed_email = st.text_input("이메일", value=vemail, key=f"ed_email_{vid}")
                         epc1, epc2 = st.columns(2)
                         with epc1:
-                            st.markdown('<div class="phone-field">', unsafe_allow_html=True)
                             ed_phone2 = st.text_input("전화번호2", value=vphone2, key=f"ed_phone2_{vid}")
-                            st.markdown('</div>', unsafe_allow_html=True)
                         with epc2:
-                            st.markdown('<div class="phone-field">', unsafe_allow_html=True)
                             ed_phone3 = st.text_input("전화번호3", value=vphone3, key=f"ed_phone3_{vid}")
-                            st.markdown('</div>', unsafe_allow_html=True)
                         bc1, bc2 = st.columns(2)
                         with bc1:
                             save_btn = st.form_submit_button("저장", type="primary", use_container_width=True)
