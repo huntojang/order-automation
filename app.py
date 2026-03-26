@@ -1671,10 +1671,13 @@ elif page == "업체 관리":
             col1, col2 = st.columns(2)
             with col1:
                 new_name = st.text_input("업체명 *")
-                new_contact = st.text_input("담당자")
             with col2:
-                new_phone = st.text_input("전화번호1 * (알림톡 수신)")
+                new_contact = st.text_input("담당자")
+            col3, col4 = st.columns(2)
+            with col3:
                 new_email = st.text_input("이메일 (선택)")
+            with col4:
+                new_phone = st.text_input("전화번호1 * (알림톡 수신)")
             pc1, pc2 = st.columns(2)
             with pc1:
                 new_phone2 = st.text_input("전화번호2 (선택)")
