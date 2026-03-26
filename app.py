@@ -253,12 +253,12 @@ st.markdown("""
     }
     /* 전화번호 필드 파란색 강조 (aria-label 기반) */
     input[aria-label*="전화번호"] {
-        background-color: #EBF3FB !important;
-        border: 1px solid #B0CDE8 !important;
+        background-color: #E8F5E9 !important;
+        border: 1px solid #A5D6A7 !important;
     }
     input[aria-label*="전화번호"]:focus {
-        border-color: #3B82C4 !important;
-        box-shadow: 0 0 0 1px #3B82C4 !important;
+        border-color: #4CAF50 !important;
+        box-shadow: 0 0 0 1px #4CAF50 !important;
     }
 
     /* ===== 프로그레스바 ===== */
