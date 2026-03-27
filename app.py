@@ -369,6 +369,25 @@ def save_upload_log(entry):
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
+# ── 다운로드 칼럼 프리셋 저장/로드 ──
+COLUMN_PRESETS_FILE = os.path.join('config', 'column_presets.json')
+
+
+def load_column_presets() -> dict:
+    """저장된 칼럼 프리셋 목록 로드. {프리셋명: [칼럼, ...], ...}"""
+    if os.path.exists(COLUMN_PRESETS_FILE):
+        with open(COLUMN_PRESETS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_column_presets(presets: dict):
+    """칼럼 프리셋 목록 저장"""
+    os.makedirs('config', exist_ok=True)
+    with open(COLUMN_PRESETS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(presets, f, ensure_ascii=False, indent=2)
+
+
 @st.cache_resource
 def get_sheet_client():
     """구글 시트 클라이언트 초기화 (앱 전체에서 1회만)"""
@@ -1507,12 +1526,72 @@ elif page == "송장 다운로드":
     combined = st.session_state.get('_download_combined')
     if combined is not None and len(combined) > 0:
         today = datetime.now().strftime('%Y%m%d')
-        upload_columns = ['주문일자', '주문번호', '수취인명', '연락처', '주소',
-                          '상품명', '옵션', '수량', '택배사', '송장번호']
-        available_cols = [c for c in upload_columns if c in combined.columns]
+        # 기본 칼럼 순서 (데이터에 존재하는 것만)
+        default_columns = ['주문일자', '주문번호', '수취인명', '연락처', '주소',
+                           '상품명', '옵션', '수량', '택배사', '송장번호']
+        all_available_cols = [c for c in default_columns if c in combined.columns]
+        # 데이터에는 있지만 기본 목록에 없는 칼럼도 추가
+        for c in combined.columns:
+            if c not in all_available_cols:
+                all_available_cols.append(c)
 
         st.markdown("---")
         st.markdown(f'<div class="section-title">수집 결과: {len(combined)}건</div>', unsafe_allow_html=True)
+
+        # ── 다운로드 칼럼 선택 ──
+        with st.expander("다운로드 칼럼 선택", expanded=False):
+            # 프리셋 로드
+            presets = load_column_presets()
+
+            # 프리셋 불러오기
+            preset_names = list(presets.keys())
+            col_preset, col_load = st.columns([4, 1])
+            with col_preset:
+                selected_preset = st.selectbox(
+                    "저장된 프리셋",
+                    options=["(직접 선택)"] + preset_names,
+                    key="_col_preset_select"
+                )
+            with col_load:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if selected_preset != "(직접 선택)" and st.button("삭제", key="_col_preset_delete", type="secondary"):
+                    presets.pop(selected_preset, None)
+                    save_column_presets(presets)
+                    st.rerun()
+
+            # 프리셋 선택 시 해당 칼럼으로 기본값 설정
+            if selected_preset != "(직접 선택)" and selected_preset in presets:
+                preset_cols = [c for c in presets[selected_preset] if c in all_available_cols]
+            else:
+                preset_cols = [c for c in default_columns if c in all_available_cols]
+
+            # 칼럼 멀티셀렉트
+            selected_cols = st.multiselect(
+                "다운로드에 포함할 칼럼을 선택하세요",
+                options=all_available_cols,
+                default=preset_cols,
+                key="_col_multiselect"
+            )
+
+            # 프리셋 저장
+            col_name, col_save = st.columns([4, 1])
+            with col_name:
+                new_preset_name = st.text_input("프리셋 이름", placeholder="예: 이지어드민 업로드용", key="_col_preset_name")
+            with col_save:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("저장", key="_col_preset_save", type="primary"):
+                    if new_preset_name.strip() and selected_cols:
+                        presets[new_preset_name.strip()] = selected_cols
+                        save_column_presets(presets)
+                        st.success(f"'{new_preset_name.strip()}' 프리셋이 저장되었습니다.")
+                        st.rerun()
+                    elif not new_preset_name.strip():
+                        st.warning("프리셋 이름을 입력해주세요.")
+                    else:
+                        st.warning("칼럼을 1개 이상 선택해주세요.")
+
+        # 선택된 칼럼이 없으면 기본값 사용
+        available_cols = selected_cols if selected_cols else [c for c in default_columns if c in combined.columns]
 
         # 택배사명 정규화 (띄어쓰기, 오타 통일)
         COURIER_ALIASES = {
