@@ -10,3 +10,8 @@ fastReruns = true
 
 [server]
 runOnSave = true
+
+[client]
+showSidebarNavigation = true
+toolbarMode = "minimal"
+showErrorDetails = false

@@ -96,6 +96,16 @@ st.markdown("""
     }
     /* Streamlit 기본 헤더/푸터 숨기기 */
     header[data-testid="stHeader"] { background: transparent !important; }
+    footer { display: none !important; }
+    /* "Hosted with Streamlit" 배지 숨기기 */
+    .viewerBadge_container__r5tak,
+    .styles_viewerBadge__CvC9N,
+    [data-testid="stDecoration"],
+    a[href*="streamlit.io"] > div { display: none !important; }
+    /* 하단 "Made with Streamlit" 링크 숨기기 */
+    .reportview-container .main footer,
+    footer .css-1lsmgbg,
+    #MainMenu { visibility: hidden !important; }
 
     /* ===== 헤더 ===== */
     .main-header {
@@ -1258,9 +1268,11 @@ elif page == "송장 현황":
             if _apps_url:
                 try:
                     with st.spinner("업체 시트 읽는 중... (약 25초)"):
-                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=90)
+                        _resp = _requests.get(_apps_url, params={"action": "refresh"}, timeout=180)
                         if _resp.status_code == 200:
                             logging.info(f'✅ Apps Script 응답: {_resp.text[:200]}')
+                            # Google Sheets API 전파 대기 (갱신 직후 읽으면 이전 데이터 반환 가능)
+                            time.sleep(3)
                             st.toast("대시보드 갱신 완료!")
                         else:
                             logging.warning(f'⚠️ Apps Script 응답 코드: {_resp.status_code}')
@@ -1273,9 +1285,10 @@ elif page == "송장 현황":
             st.session_state['_dashboard_cache'] = {}
             GoogleSheetClient._spreadsheet_cache.clear()
             GoogleSheetClient._worksheet_cache.clear()
+            st.cache_resource.clear()
             st.rerun()
     with col_status:
-        st.caption(f"자동 새로고침 (1분)  |  {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"자동 새로고침 (5분)  |  {datetime.now().strftime('%H:%M:%S')}")
 
     if sheet_client and master_url:
         dashboard = fetch_dashboard(sheet_client, master_url)
