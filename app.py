@@ -82,6 +82,38 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# Streamlit Cloud 우하단 배지 + 프로필 아이콘 강제 제거 (JS)
+st.components.v1.html("""
+<script>
+function removeStreamlitBranding() {
+    // "Hosted with Streamlit" 배지
+    document.querySelectorAll('a[href*="streamlit.io"]').forEach(el => {
+        var target = el.closest('div[style]') || el.parentElement;
+        if (target) target.style.display = 'none';
+        el.style.display = 'none';
+    });
+    // 프로필 아이콘 (Created by)
+    document.querySelectorAll('img[src*="avatars"], img[src*="github"]').forEach(el => {
+        var target = el.closest('div[style]') || el.closest('a') || el.parentElement;
+        if (target) target.style.display = 'none';
+        el.style.display = 'none';
+    });
+    // data-testid 기반
+    document.querySelectorAll('[data-testid="manage-app-button"]').forEach(el => el.style.display = 'none');
+    // 하단 고정 요소 (배지 컨테이너)
+    document.querySelectorAll('div[style*="position: fixed"][style*="bottom"]').forEach(el => {
+        if (el.querySelector('a') || el.querySelector('img')) el.style.display = 'none';
+    });
+}
+// 즉시 실행 + 반복 (동적 로딩 대응)
+removeStreamlitBranding();
+setInterval(removeStreamlitBranding, 1000);
+// DOM 변경 감지
+var observer = new MutationObserver(removeStreamlitBranding);
+observer.observe(document.body, { childList: true, subtree: true });
+</script>
+""", height=0)
+
 # CSS 스타일 — 메인 (Green Modern)
 st.markdown("""
 <style>
@@ -96,25 +128,9 @@ st.markdown("""
     }
     /* Streamlit 기본 헤더/푸터 숨기기 */
     header[data-testid="stHeader"] { background: transparent !important; }
-    footer, footer * { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
-    /* Streamlit Cloud 우하단 배지 + 프로필 완전 숨기기 */
-    [data-testid="stDecoration"],
-    [data-testid="manage-app-button"],
-    .viewerBadge_container__r5tak,
-    .styles_viewerBadge__CvC9N,
-    .viewerBadge_link__qRIco,
-    a[href*="streamlit.io"],
-    div[class*="viewerBadge"],
-    div[class*="StatusWidget"],
-    #MainMenu,
-    ._profileContainer_gzau3_53,
-    div[class*="profileContainer"],
-    div[class*="stAppDeployButton"],
-    [data-testid="stToolbar"] > div:last-child {
-        display: none !important; visibility: hidden !important;
-        width: 0 !important; height: 0 !important; overflow: hidden !important;
-        position: absolute !important; pointer-events: none !important;
-    }
+    footer { display: none !important; }
+    #MainMenu { visibility: hidden !important; }
+    [data-testid="stDecoration"] { display: none !important; }
 
     /* ===== 헤더 ===== */
     .main-header {
