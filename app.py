@@ -82,35 +82,25 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# Streamlit Cloud 우하단 배지 + 프로필 아이콘 강제 제거 (JS)
+# Streamlit Cloud 우하단 배지 + 프로필 아이콘 강제 제거 (JS — parent document 접근)
 st.components.v1.html("""
 <script>
+var pd = window.parent.document;
 function removeStreamlitBranding() {
-    // "Hosted with Streamlit" 배지
-    document.querySelectorAll('a[href*="streamlit.io"]').forEach(el => {
-        var target = el.closest('div[style]') || el.parentElement;
-        if (target) target.style.display = 'none';
-        el.style.display = 'none';
+    pd.querySelectorAll('a[href*="streamlit.io"]').forEach(function(el) {
+        var t = el.closest('div') || el; t.style.display = 'none';
     });
-    // 프로필 아이콘 (Created by)
-    document.querySelectorAll('img[src*="avatars"], img[src*="github"]').forEach(el => {
-        var target = el.closest('div[style]') || el.closest('a') || el.parentElement;
-        if (target) target.style.display = 'none';
-        el.style.display = 'none';
-    });
-    // data-testid 기반
-    document.querySelectorAll('[data-testid="manage-app-button"]').forEach(el => el.style.display = 'none');
-    // 하단 고정 요소 (배지 컨테이너)
-    document.querySelectorAll('div[style*="position: fixed"][style*="bottom"]').forEach(el => {
-        if (el.querySelector('a') || el.querySelector('img')) el.style.display = 'none';
+    pd.querySelectorAll('[data-testid="manage-app-button"]').forEach(function(el) { el.style.display = 'none'; });
+    pd.querySelectorAll('footer').forEach(function(el) { el.style.display = 'none'; });
+    // "Created by" 프로필 아이콘
+    pd.querySelectorAll('img[src*="avatar"], img[src*="github"]').forEach(function(el) {
+        var t = el.closest('a') || el.closest('div') || el; t.style.display = 'none';
     });
 }
-// 즉시 실행 + 반복 (동적 로딩 대응)
 removeStreamlitBranding();
-setInterval(removeStreamlitBranding, 1000);
-// DOM 변경 감지
-var observer = new MutationObserver(removeStreamlitBranding);
-observer.observe(document.body, { childList: true, subtree: true });
+setInterval(removeStreamlitBranding, 500);
+var obs = new MutationObserver(removeStreamlitBranding);
+obs.observe(pd.body, { childList: true, subtree: true });
 </script>
 """, height=0)
 
