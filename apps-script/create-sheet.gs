@@ -115,6 +115,7 @@ var MASTER_SHEET_ID = '18_cKCFmBvUjIqlmdyidgYZ226uk4SRWYh-Rv0rWovyc';
 
 function updateDashboard() {
   var startTime = new Date().getTime();
+  var MAX_RUNTIME = 5 * 60 * 1000; // 5분 안전 타임아웃 (Apps Script 제한 6분)
   var masterSS = SpreadsheetApp.openById(MASTER_SHEET_ID);
   var vendorSheet = masterSS.getSheetByName('시트1');
   if (!vendorSheet) {
@@ -138,7 +139,7 @@ function updateDashboard() {
     dashboard = masterSS.insertSheet('대시보드');
   }
 
-  // 기존 대시보드 데이터 캐시 (quota 에러 시 이전 값 유지)
+  // 기존 대시보드 데이터 캐시 (quota 에러/타임아웃 시 이전 값 유지)
   var prevData = {};
   try {
     var existingData = dashboard.getDataRange().getValues();
@@ -163,14 +164,17 @@ function updateDashboard() {
     }
   }
 
-  // 병렬 요청: 모든 업체 시트 데이터를 한번에 fetch (UrlFetchApp.fetchAll)
+  // ===== 핵심 최적화: A열 + J열만 읽기 (batchGet) =====
+  // 기존: A1:J100 (10열×100행 = 1000셀/업체) → 변경: A2:A100 + J2:J100 (2열×99행 = 198셀/업체)
+  // 대역폭 80% 절감
   var token = ScriptApp.getOAuthToken();
   var requests = [];
+  var rangeA = encodeURIComponent('시트1!A2:A100');
+  var rangeJ = encodeURIComponent('시트1!J2:J100');
   for (var v = 0; v < vendors.length; v++) {
-    // 시트1의 A:J 범위만 읽기 (헤더 + 데이터, 송장번호까지만)
-    // fields 파라미터로 values만 받아서 bandwidth 절약
     var apiUrl = 'https://sheets.googleapis.com/v4/spreadsheets/' + vendors[v].sheetId
-      + '/values/%EC%8B%9C%ED%8A%B81!A1:J100?fields=values';
+      + '/values:batchGet?ranges=' + rangeA + '&ranges=' + rangeJ
+      + '&fields=valueRanges/values';
     requests.push({
       url: apiUrl,
       method: 'get',
@@ -179,35 +183,75 @@ function updateDashboard() {
     });
   }
 
-  // 5개씩 배치로 병렬 요청 (bandwidth quota 준수)
-  var BATCH_SIZE = 5;
+  // 3개씩 배치, 10초 대기 (대역폭 80% 감소로 대기시간도 축소 가능)
+  var BATCH_SIZE = 3;
+  var BATCH_DELAY = 10000;
   var responses = [];
   var totalBatches = Math.ceil(requests.length / BATCH_SIZE);
-  Logger.log('병렬 요청 시작: ' + requests.length + '개 업체, ' + totalBatches + '배치');
+  var timedOut = false;
+  Logger.log('병렬 요청 시작: ' + requests.length + '개 업체, ' + totalBatches + '배치 (batchGet 최적화)');
 
   for (var b = 0; b < totalBatches; b++) {
-    var batch = requests.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-    var batchResp = UrlFetchApp.fetchAll(batch);
-    for (var br = 0; br < batchResp.length; br++) {
-      responses.push(batchResp[br]);
+    // 안전 타임아웃 체크
+    if (new Date().getTime() - startTime > MAX_RUNTIME) {
+      Logger.log('⏱️ 5분 안전 제한 도달, 배치 ' + b + '/' + totalBatches + '에서 중단. 나머지는 캐시 사용');
+      timedOut = true;
+      break;
     }
-    // 마지막 배치가 아니면 20초 대기 (bandwidth quota 방지)
+
+    var batch = requests.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+    try {
+      var batchResp = UrlFetchApp.fetchAll(batch);
+      for (var br = 0; br < batchResp.length; br++) {
+        responses.push(batchResp[br]);
+      }
+    } catch (e) {
+      Logger.log('⚠️ 배치 ' + b + ' 실패: ' + e.toString() + ' — 30초 대기 후 재시도');
+      Utilities.sleep(30000);
+      // 재시도 1회
+      try {
+        var retryResp = UrlFetchApp.fetchAll(batch);
+        for (var rr = 0; rr < retryResp.length; rr++) {
+          responses.push(retryResp[rr]);
+        }
+      } catch (e2) {
+        Logger.log('❌ 배치 ' + b + ' 재시도 실패: ' + e2.toString() + ' — 캐시 사용');
+        // 이 배치의 업체들은 null로 채워서 캐시 처리
+        for (var skip = 0; skip < batch.length; skip++) {
+          responses.push(null);
+        }
+      }
+    }
+
     if (b < totalBatches - 1) {
-      Utilities.sleep(20000);
+      Utilities.sleep(BATCH_DELAY);
     }
   }
 
   var fetchTime = Math.round((new Date().getTime() - startTime) / 1000);
-  Logger.log('배치 fetch 완료: ' + fetchTime + '초');
+  Logger.log('배치 fetch 완료: ' + fetchTime + '초, 응답 ' + responses.length + '/' + vendors.length);
 
   // 응답 처리
   var dashHeaders = ['업체명', '전체주문', '송장완료', '미입력', '완료율', '최종갱신'];
   var results = [dashHeaders];
   var now = new Date();
   var quotaErrors = 0;
+  var cacheUsed = 0;
 
   for (var v = 0; v < vendors.length; v++) {
     var vendorName = vendors[v].name;
+
+    // 타임아웃으로 fetch 안 된 업체 → 캐시 사용
+    if (v >= responses.length || responses[v] === null) {
+      cacheUsed++;
+      if (prevData[vendorName]) {
+        results.push(prevData[vendorName]);
+      } else {
+        results.push([vendorName, 0, 0, 0, 0, now]);
+      }
+      continue;
+    }
+
     try {
       var resp = responses[v];
       var code = resp.getResponseCode();
@@ -230,35 +274,25 @@ function updateDashboard() {
       }
 
       var json = JSON.parse(resp.getContentText());
-      var values = json.values || [];
+      var valueRanges = json.valueRanges || [];
 
-      if (values.length <= 1) {
-        results.push([vendorName, 0, 0, 0, 0, now]);
-        continue;
+      // A열 (주문 존재 여부) — 빈 행에서 멈춤
+      var aValues = (valueRanges[0] && valueRanges[0].values) || [];
+      var totalOrders = 0;
+      for (var r = 0; r < aValues.length; r++) {
+        if (aValues[r] && aValues[r][0] && String(aValues[r][0]).trim() !== '') {
+          totalOrders++;
+        } else {
+          break;
+        }
       }
 
-      var headerRow = values[0];
-      var invoiceCol = headerRow.indexOf('송장번호');
-
-      var totalOrders = 0;
+      // J열 (송장번호) — totalOrders 범위 내에서만 카운트
+      var jValues = (valueRanges[1] && valueRanges[1].values) || [];
       var invoiced = 0;
-
-      for (var r = 1; r < values.length; r++) {
-        // 빈 행 체크 (첫 5열)
-        var hasData = false;
-        for (var c = 0; c < Math.min(values[r].length, 5); c++) {
-          if (values[r][c] && String(values[r][c]).trim() !== '') {
-            hasData = true;
-            break;
-          }
-        }
-        if (!hasData) break;
-
-        totalOrders++;
-        if (invoiceCol >= 0 && invoiceCol < values[r].length) {
-          if (values[r][invoiceCol] && String(values[r][invoiceCol]).trim() !== '') {
-            invoiced++;
-          }
+      for (var r = 0; r < Math.min(jValues.length, totalOrders); r++) {
+        if (jValues[r] && jValues[r][0] && String(jValues[r][0]).trim() !== '') {
+          invoiced++;
         }
       }
 
@@ -279,7 +313,8 @@ function updateDashboard() {
   dashboard.clear();
   dashboard.getRange(1, 1, results.length, dashHeaders.length).setValues(results);
   var elapsed = Math.round((new Date().getTime() - startTime) / 1000);
-  Logger.log('대시보드 갱신 완료: ' + (results.length - 1) + '개 업체, quota에러 ' + quotaErrors + '건, ' + elapsed + '초 소요');
+  Logger.log('대시보드 갱신 완료: ' + (results.length - 1) + '개 업체, quota에러 ' + quotaErrors + '건, 캐시사용 ' + cacheUsed + '건, ' + elapsed + '초 소요'
+    + (timedOut ? ' (타임아웃으로 일부 캐시)' : ''));
 }
 
 function extractSheetId(url) {
