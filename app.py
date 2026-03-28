@@ -96,16 +96,25 @@ st.markdown("""
     }
     /* Streamlit 기본 헤더/푸터 숨기기 */
     header[data-testid="stHeader"] { background: transparent !important; }
-    footer { display: none !important; }
-    /* "Hosted with Streamlit" 배지 숨기기 */
+    footer, footer * { display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; }
+    /* Streamlit Cloud 우하단 배지 + 프로필 완전 숨기기 */
+    [data-testid="stDecoration"],
+    [data-testid="manage-app-button"],
     .viewerBadge_container__r5tak,
     .styles_viewerBadge__CvC9N,
-    [data-testid="stDecoration"],
-    a[href*="streamlit.io"] > div { display: none !important; }
-    /* 하단 "Made with Streamlit" 링크 숨기기 */
-    .reportview-container .main footer,
-    footer .css-1lsmgbg,
-    #MainMenu { visibility: hidden !important; }
+    .viewerBadge_link__qRIco,
+    a[href*="streamlit.io"],
+    div[class*="viewerBadge"],
+    div[class*="StatusWidget"],
+    #MainMenu,
+    ._profileContainer_gzau3_53,
+    div[class*="profileContainer"],
+    div[class*="stAppDeployButton"],
+    [data-testid="stToolbar"] > div:last-child {
+        display: none !important; visibility: hidden !important;
+        width: 0 !important; height: 0 !important; overflow: hidden !important;
+        position: absolute !important; pointer-events: none !important;
+    }
 
     /* ===== 헤더 ===== */
     .main-header {
