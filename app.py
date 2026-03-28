@@ -82,27 +82,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# Streamlit Cloud 우하단 배지 + 프로필 아이콘 강제 제거 (JS — parent document 접근)
-st.components.v1.html("""
-<script>
-var pd = window.parent.document;
-function removeStreamlitBranding() {
-    pd.querySelectorAll('a[href*="streamlit.io"]').forEach(function(el) {
-        var t = el.closest('div') || el; t.style.display = 'none';
-    });
-    pd.querySelectorAll('[data-testid="manage-app-button"]').forEach(function(el) { el.style.display = 'none'; });
-    pd.querySelectorAll('footer').forEach(function(el) { el.style.display = 'none'; });
-    // "Created by" 프로필 아이콘
-    pd.querySelectorAll('img[src*="avatar"], img[src*="github"]').forEach(function(el) {
-        var t = el.closest('a') || el.closest('div') || el; t.style.display = 'none';
-    });
-}
-removeStreamlitBranding();
-setInterval(removeStreamlitBranding, 500);
-var obs = new MutationObserver(removeStreamlitBranding);
-obs.observe(pd.body, { childList: true, subtree: true });
-</script>
-""", height=0)
+# Streamlit Cloud 우하단 배지 + 프로필 아이콘 숨기기 (흰색 오버레이)
 
 # CSS 스타일 — 메인 (Green Modern)
 st.markdown("""
@@ -121,6 +101,19 @@ st.markdown("""
     footer { display: none !important; }
     #MainMenu { visibility: hidden !important; }
     [data-testid="stDecoration"] { display: none !important; }
+    /* Streamlit Cloud 우하단 배지 + 프로필 — 흰색 오버레이로 완전 가림 */
+    body::after {
+        content: '' !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        right: 0 !important;
+        width: 250px !important;
+        height: 70px !important;
+        background: #FFFFFF !important;
+        z-index: 999999999 !important;
+        pointer-events: none !important;
+        display: block !important;
+    }
 
     /* ===== 헤더 ===== */
     .main-header {
